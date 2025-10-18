@@ -1,0 +1,44 @@
+syntax = "proto2";
+package Command;
+
+message MoveCommand{
+    required float forvardSpeed = 1;
+    required float strafeSpeed = 2;
+    required float rotationSpeed = 3;
+}
+
+
+message TelemetryUpdate{
+    required string name = 1;
+    oneof value {
+        float fvalue = 2;
+        string svalue = 3;
+        bool bvalue = 4;
+        int32 ivalue = 5;
+    }
+}
+
+message LidarData{
+    required int64 timestamp = 1;
+    repeated float angles = 2 [packed=true];      // 16 angle readings in radians
+    repeated float distances = 3 [packed=true];   // 16 distance readings in meters
+}
+
+message GyroData{
+    required int64 timestamp = 1;
+    required float x = 2;    // X-axis angular velocity in rad/s
+    required float y = 3;    // Y-axis angular velocity in rad/s
+}
+
+message Heartbeat{
+    required int64 timestamp = 1;
+    optional string client_id = 2;
+}
+
+message HeightCommand{
+    required float height = 1;
+}
+
+message WalkingStyleCommand{
+    required int32 style = 1;  // 1, 2, or 3
+}

@@ -1,0 +1,12 @@
+[generators]
+CMakeToolchain
+CMakeDeps
+VirtualRunEnv
+
+[requires]
+zeromq/4.3.5
+cppzmq/4.11.0
+protobuf/3.21.12
+
+[imports]
+bin, *.exe -> ./bin # Copies all exe files from packages bin folder to my "bin" folder
