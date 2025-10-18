@@ -71,7 +71,7 @@ Window {
             id: connectionStatus
             width: 200
             height: 40
-            anchors.top: parent.top
+            anchors.bottom: parent.bottom
             anchors.right: parent.right
             anchors.margins: 10
             color: robotController.connected ? "green" : "red"
