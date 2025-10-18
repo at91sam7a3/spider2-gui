@@ -149,7 +149,7 @@ Window {
         Rectangle {
             width: 150
             height: 30
-            anchors.top: parent.top
+            anchors.verticalCenter: parent.verticalCenter
             anchors.right: parent.right
             anchors.margins: 10
             color: robotController.connected ? "green" : "red"
@@ -198,6 +198,65 @@ Window {
                     text: "Rotation: " + robotController.rotationSpeed.toFixed(2)
                     color: "white"
                     font.pixelSize: 12
+                }
+            }
+        }
+        
+        // Lidar display
+        LidarDisplay {
+            id: lidarDisplay
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            anchors.margins: 10
+            model: robotController.lidarController ? robotController.lidarController.model : null
+        }
+        
+        // Gyro display
+        GyroDisplay {
+            id: gyroDisplay
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.margins: 10
+            controller: robotController.gyroController
+        }
+        
+        // Help message with hotkeys
+        Rectangle {
+            width: 400
+            height: 100
+            anchors.bottom: parent.bottom
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.margins: 10
+            color: "black"
+            opacity: 0.7
+            radius: 8
+            border.color: "white"
+            border.width: 1
+            
+            Column {
+                anchors.centerIn: parent
+                spacing: 5
+                
+                Text {
+                    text: "Movement Controls:"
+                    color: "white"
+                    font.pixelSize: 12
+                    font.bold: true
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+                
+                Text {
+                    text: "W/S - Forward/Backward  |  A/D - Strafe Left/Right  |  Q/E - Rotate Left/Right"
+                    color: "white"
+                    font.pixelSize: 10
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+                
+                Text {
+                    text: "1/2/3 - Walking Style  |  +/- - Height Up/Down"
+                    color: "white"
+                    font.pixelSize: 10
+                    anchors.horizontalCenter: parent.horizontalCenter
                 }
             }
         }
@@ -354,6 +413,22 @@ Window {
                     break
                 case Qt.Key_E:
                     robotController.rotationSpeed = 1.0
+                    break
+                case Qt.Key_1:
+                    robotController.walkingStyle = 1
+                    break
+                case Qt.Key_2:
+                    robotController.walkingStyle = 2
+                    break
+                case Qt.Key_3:
+                    robotController.walkingStyle = 3
+                    break
+                case Qt.Key_Plus:
+                case Qt.Key_Equal:
+                    robotController.height = Math.min(robotController.height + 5, 100)
+                    break
+                case Qt.Key_Minus:
+                    robotController.height = Math.max(robotController.height - 5, 0)
                     break
             }
         }

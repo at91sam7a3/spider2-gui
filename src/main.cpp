@@ -3,6 +3,8 @@
 #include <QQmlContext>
 #include "RobotController.h"
 #include "VideoProvider.h"
+#include "LidarController.h"
+#include "GyroController.h"
 
 int main(int argc, char *argv[])
 {
@@ -10,6 +12,8 @@ int main(int argc, char *argv[])
 
     // Register QML types
     qmlRegisterType<RobotController>("Spider2", 1, 0, "RobotController");
+    qmlRegisterType<LidarController>("Spider2", 1, 0, "LidarController");
+    qmlRegisterType<GyroController>("Spider2", 1, 0, "GyroController");
     
     // Create and register video provider
     VideoProvider *videoProvider = new VideoProvider();

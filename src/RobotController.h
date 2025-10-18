@@ -9,6 +9,8 @@
 #include <thread>
 #include <atomic>
 #include "MessageTypes.hpp"
+#include "LidarController.h"
+#include "GyroController.h"
 
 class RobotController : public QObject
 {
@@ -23,6 +25,8 @@ class RobotController : public QObject
     Q_PROPERTY(float height READ height WRITE setHeight NOTIFY heightChanged)
     Q_PROPERTY(int walkingStyle READ walkingStyle WRITE setWalkingStyle NOTIFY walkingStyleChanged)
     Q_PROPERTY(QVariantMap telemetryData READ telemetryData NOTIFY telemetryDataChanged)
+    Q_PROPERTY(LidarController* lidarController READ lidarController NOTIFY lidarControllerChanged)
+    Q_PROPERTY(GyroController* gyroController READ gyroController NOTIFY gyroControllerChanged)
 
 public:
     explicit RobotController(QObject *parent = nullptr);
@@ -37,6 +41,8 @@ public:
     float height() const { return m_height; }
     int walkingStyle() const { return m_walkingStyle; }
     QVariantMap telemetryData() const { return m_telemetryData; }
+    LidarController* lidarController() const { return m_lidarController; }
+    GyroController* gyroController() const { return m_gyroController; }
 
 public slots:
     void setServerIp(const QString &ip);
@@ -57,6 +63,8 @@ signals:
     void heightChanged();
     void walkingStyleChanged();
     void telemetryDataChanged();
+    void lidarControllerChanged();
+    void gyroControllerChanged();
     void connectionError(const QString &error);
 
 private slots:
@@ -89,6 +97,12 @@ private:
 
     // Telemetry data
     QVariantMap m_telemetryData;
+
+    // Lidar controller
+    LidarController *m_lidarController;
+
+    // Gyro controller
+    GyroController *m_gyroController;
 
     // Heartbeat timer
     QTimer *m_heartbeatTimer;

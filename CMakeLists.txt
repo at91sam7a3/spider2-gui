@@ -57,6 +57,8 @@ target_include_directories(protobuf_generated PUBLIC ${CMAKE_CURRENT_BINARY_DIR}
 # QML files - we'll handle them differently
 set(QML_FILES
     res/qml/MainSimple.qml
+    res/qml/LidarDisplay.qml
+    res/qml/GyroDisplay.qml
 )
 
 # Source files
@@ -64,12 +66,20 @@ set(SOURCES
     src/main.cpp
     src/RobotController.cpp
     src/VideoProvider.cpp
+    src/LidarController.cpp
+    src/LidarDataModel.cpp
+    src/GyroController.cpp
+    src/GyroDataModel.cpp
 )
 
 set(HEADERS
     src/RobotController.h
     src/VideoProvider.h
     src/MessageTypes.hpp
+    src/LidarController.h
+    src/LidarDataModel.h
+    src/GyroController.h
+    src/GyroDataModel.h
 )
 
 # Create executable

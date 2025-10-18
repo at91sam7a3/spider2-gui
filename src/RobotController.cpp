@@ -5,10 +5,14 @@
 #include <zmq.hpp>
 #include <zmq_addon.hpp>
 #include "command.pb.h"
+#include "LidarDataModel.h"
+#include "GyroDataModel.h"
 
 RobotController::RobotController(QObject *parent)
     : QObject(parent)
     , m_context(std::make_unique<zmq::context_t>(1))
+    , m_lidarController(new LidarController(this))
+    , m_gyroController(new GyroController(this))
     , m_heartbeatTimer(new QTimer(this))
 {
     m_heartbeatTimer->setInterval(1000); // Send heartbeat every second
@@ -246,6 +250,17 @@ void RobotController::processIncomingMessage(const zmq::message_t &message)
         case Spider2::MessageType::LIDAR_DATA: {
             Command::LidarData lidar;
             if (lidar.ParseFromString(protobufData)) {
+                // Convert protobuf data to LidarPoint vector
+                QVector<LidarPoint> points;
+                int count = std::min(lidar.angles_size(), lidar.distances_size());
+                
+                for (int i = 0; i < count; i++) {
+                    points.append(LidarPoint(lidar.angles(i), lidar.distances(i)));
+                }
+                
+                // Update lidar controller
+                m_lidarController->updateLidarData(points);
+                
                 // Store lidar data in telemetry
                 QVariantMap lidarData;
                 lidarData["timestamp"] = static_cast<qint64>(lidar.timestamp());
@@ -259,6 +274,10 @@ void RobotController::processIncomingMessage(const zmq::message_t &message)
         case Spider2::MessageType::GYRO_DATA: {
             Command::GyroData gyro;
             if (gyro.ParseFromString(protobufData)) {
+                // Update gyro controller
+                m_gyroController->updateGyroData(gyro.x(), gyro.y(), 0.0f, gyro.timestamp());
+                
+                // Store gyro data in telemetry
                 QVariantMap gyroData;
                 gyroData["timestamp"] = static_cast<qint64>(gyro.timestamp());
                 gyroData["x"] = gyro.x();
