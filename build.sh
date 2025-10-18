@@ -92,7 +92,7 @@ fi
 # Install Conan dependencies
 print_status "Installing Conan dependencies..."
 cd build
-conan install .. --build=missing --update
+conan install .. --build=missing --update --output-folder=.
 
 if [ $? -ne 0 ]; then
     print_error "Failed to install Conan dependencies"

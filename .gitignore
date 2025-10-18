@@ -1,41 +1,48 @@
-# Prerequisites
-*.d
+# Build directories
+build/
+bin/
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# Source directories (if you want to ignore generated files in src)
+src/*.pb.h
+src/*.pb.cc
 
-# Precompiled Headers
-*.gch
-*.pch
+# Conan auto-generated files
+conanbuild.sh
+conanrun.sh
+conanbuildenv-*.sh
+conanrunenv-*.sh
+deactivate_conanbuild.sh
+deactivate_conanrun.sh
+deactivate_conanbuildenv-*.sh
+deactivate_conanrunenv-*.sh
 
-# Linker files
-*.ilk
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+CMakePresets.json
+CMakeUserPresets.json
 
-# Debugger Files
-*.pdb
+# Conan generated files
+conan_toolchain.cmake
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
+# Protobuf generated files
+*.pb.h
+*.pb.cc
 
-# Fortran module files
-*.mod
-*.smod
+# Qt generated files
+*_autogen/
+*.moc
+*.qrc
 
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
+# IDE files
+.vscode/
+.idea/
+*.pro.user
+*.pro.user.*
 
-# Executables
-*.exe
-*.out
-*.app
-
-# debug information files
-*.dwo
+# OS files
+.DS_Store
+Thumbs.db

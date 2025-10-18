@@ -17,7 +17,7 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
 # Include Conan generated files
-include(${CMAKE_SOURCE_DIR}/conan_toolchain.cmake)
+include(${CMAKE_BINARY_DIR}/conan_toolchain.cmake)
 
 # Find Conan packages
 find_package(ZeroMQ REQUIRED)
@@ -31,7 +31,7 @@ set(PROTOBUF_GENERATE_CPP_APPEND_PATH TRUE)
 set(PROTO_SOURCES "")
 set(PROTO_HEADERS "")
 
-get_filename_component(PROTO_FILE "${CMAKE_CURRENT_SOURCE_DIR}/command.proto" ABSOLUTE)
+get_filename_component(PROTO_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/command.proto" ABSOLUTE)
 get_filename_component(PROTO_NAME "${PROTO_FILE}" NAME_WE)
 get_filename_component(PROTO_PATH "${PROTO_FILE}" PATH)
 
@@ -56,20 +56,20 @@ target_include_directories(protobuf_generated PUBLIC ${CMAKE_CURRENT_BINARY_DIR}
 
 # QML files - we'll handle them differently
 set(QML_FILES
-    MainSimple.qml
+    res/qml/MainSimple.qml
 )
 
 # Source files
 set(SOURCES
-    main.cpp
-    RobotController.cpp
-    VideoProvider.cpp
+    src/main.cpp
+    src/RobotController.cpp
+    src/VideoProvider.cpp
 )
 
 set(HEADERS
-    RobotController.h
-    VideoProvider.h
-    MessageTypes.hpp
+    src/RobotController.h
+    src/VideoProvider.h
+    src/MessageTypes.hpp
 )
 
 # Create executable
