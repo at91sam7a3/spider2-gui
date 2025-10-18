@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
     // Register image provider
     engine.addImageProvider("video", videoProvider);
     
-    const QUrl url(QStringLiteral("qrc:/spider2-gui/MainSimple.qml"));
+    const QUrl url(QStringLiteral("qrc:/spider2-gui/res/qml/MainSimple.qml"));
     QObject::connect(
         &engine,
         &QQmlApplicationEngine::objectCreationFailed,

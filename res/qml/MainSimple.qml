@@ -33,8 +33,8 @@ Window {
         // Simple connection dialog
         Rectangle {
             id: connectionDialog
-            width: 300
-            height: 150
+            width: 350
+            height: 200
             anchors.centerIn: parent
             color: "lightgray"
             border.color: "black"
@@ -42,9 +42,11 @@ Window {
             radius: 10
             visible: !robotController.connected
             
+            property string robotIp: "192.168.1.100"
+            
             Column {
                 anchors.centerIn: parent
-                spacing: 20
+                spacing: 15
                 
                 Text {
                     text: "Connect to Spider2 Robot"
@@ -54,32 +56,89 @@ Window {
                 }
                 
                 Text {
-                    id: robotIpAddress
-                    text: "IP: 192.168.1.100"
+                    text: "Enter Robot IP Address:"
                     font.pixelSize: 14
                     anchors.horizontalCenter: parent.horizontalCenter
                 }
                 
                 Rectangle {
-                    width: 100
-                    height: 30
-                    color: "lightgreen"
+                    width: 200
+                    height: 35
+                    color: "white"
                     border.color: "black"
                     border.width: 1
                     radius: 5
                     anchors.horizontalCenter: parent.horizontalCenter
                     
-                    Text {
-                        anchors.centerIn: parent
-                        text: "Connect"
+                    TextInput {
+                        id: ipInput
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        text: connectionDialog.robotIp
+                        font.pixelSize: 14
                         color: "black"
+                        selectByMouse: true
+                        cursorVisible: true
+                        
+                        onTextChanged: {
+                            connectionDialog.robotIp = text
+                        }
+                        
+                        Keys.onReturnPressed: {
+                            connectButton.clicked()
+                        }
+                    }
+                }
+                
+                Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 15
+                    
+                    Rectangle {
+                        id: connectButton
+                        width: 80
+                        height: 30
+                        color: "lightgreen"
+                        border.color: "black"
+                        border.width: 1
+                        radius: 5
+                        
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Connect"
+                            color: "black"
+                            font.pixelSize: 12
+                        }
+                        
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                robotController.serverIp = connectionDialog.robotIp
+                                robotController.connectToRobot()
+                            }
+                        }
                     }
                     
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: {
-                            robotController.serverIp = "192.168.1.100"
-                            robotController.connectToRobot()
+                    Rectangle {
+                        width: 80
+                        height: 30
+                        color: "lightcoral"
+                        border.color: "black"
+                        border.width: 1
+                        radius: 5
+                        
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Cancel"
+                            color: "black"
+                            font.pixelSize: 12
+                        }
+                        
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                Qt.quit()
+                            }
                         }
                     }
                 }
