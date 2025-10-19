@@ -2,7 +2,7 @@ syntax = "proto2";
 package Command;
 
 message MoveCommand{
-    required float forvardSpeed = 1;
+    required float forwardSpeed = 1;
     required float strafeSpeed = 2;
     required float rotationSpeed = 3;
 }

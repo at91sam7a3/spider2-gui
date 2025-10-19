@@ -75,7 +75,7 @@ private:
     void stopCommunicationThread();
     void communicationLoop();
     void sendMessage(Spider2::MessageType type, const google::protobuf::Message &message);
-    void processIncomingMessage(const zmq::message_t &message);
+    void processIncomingMessage(const zmq::message_t &type_msg, const zmq::message_t &data_msg);
     void updateTelemetry(const Command::TelemetryUpdate &telemetry);
 
     // ZeroMQ components

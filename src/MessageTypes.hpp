@@ -87,7 +87,7 @@ namespace MessageFactory {
                                                   float strafe_speed, 
                                                   float rotation_speed) {
         Command::MoveCommand cmd;
-        cmd.set_forvardspeed(forward_speed);
+        cmd.set_forwardspeed(forward_speed);
         cmd.set_strafespeed(strafe_speed);
         cmd.set_rotationspeed(rotation_speed);
         return cmd;
@@ -232,10 +232,10 @@ namespace MessageValidator {
      * @return true if valid, false otherwise
      */
     inline bool isValidMoveCommand(const Command::MoveCommand& cmd) {
-        return cmd.has_forvardspeed() && 
+        return cmd.has_forwardspeed() && 
                cmd.has_strafespeed() && 
                cmd.has_rotationspeed() &&
-               cmd.forvardspeed() >= -1.0f && cmd.forvardspeed() <= 1.0f &&
+               cmd.forwardspeed() >= -1.0f && cmd.forwardspeed() <= 1.0f &&
                cmd.strafespeed() >= -1.0f && cmd.strafespeed() <= 1.0f &&
                cmd.rotationspeed() >= -1.0f && cmd.rotationspeed() <= 1.0f;
     }

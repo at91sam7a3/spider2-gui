@@ -178,11 +178,24 @@ void RobotController::communicationLoop()
             zmq::poll(items, 1, std::chrono::milliseconds(100));
             
             if (items[0].revents & ZMQ_POLLIN) {
-                zmq::message_t message;
-                auto result = m_socket->recv(message, zmq::recv_flags::dontwait);
+                // Receive identity frame first (ROUTER/DEALER pattern)
+                zmq::message_t identity;
+                auto result = m_socket->recv(identity, zmq::recv_flags::dontwait);
                 
                 if (result) {
-                    processIncomingMessage(message);
+                    // Receive message type second
+                    zmq::message_t type_msg;
+                    result = m_socket->recv(type_msg, zmq::recv_flags::dontwait);
+                    
+                    if (result && type_msg.size() == 1) {
+                        // Receive message data third
+                        zmq::message_t data_msg;
+                        result = m_socket->recv(data_msg, zmq::recv_flags::dontwait);
+                        
+                        if (result) {
+                            processIncomingMessage(type_msg, data_msg);
+                        }
+                    }
                 }
             }
         } catch (const zmq::error_t &e) {
@@ -205,13 +218,14 @@ void RobotController::sendMessage(Spider2::MessageType type, const google::proto
         std::string serialized;
         message.SerializeToString(&serialized);
         
-        // Create ZeroMQ message with type byte + protobuf data
-        zmq::message_t zmqMessage(serialized.size() + 1);
-        char *data = static_cast<char*>(zmqMessage.data());
-        data[0] = static_cast<uint8_t>(type);
-        std::memcpy(data + 1, serialized.data(), serialized.size());
+        // Send message type first (DEALER socket automatically adds identity)
+        uint8_t type_byte = static_cast<uint8_t>(type);
+        zmq::message_t type_msg(&type_byte, 1);
+        m_socket->send(type_msg, zmq::send_flags::sndmore);
         
-        m_socket->send(zmqMessage, zmq::send_flags::dontwait);
+        // Send message data second
+        zmq::message_t data_msg(serialized.data(), serialized.size());
+        m_socket->send(data_msg, zmq::send_flags::dontwait);
         
     } catch (const zmq::error_t &e) {
         qDebug() << "Failed to send message:" << e.what();
@@ -220,14 +234,13 @@ void RobotController::sendMessage(Spider2::MessageType type, const google::proto
     }
 }
 
-void RobotController::processIncomingMessage(const zmq::message_t &message)
+void RobotController::processIncomingMessage(const zmq::message_t &type_msg, const zmq::message_t &data_msg)
 {
-    if (message.size() < 1) {
+    if (type_msg.size() != 1) {
         return;
     }
 
-    const char *data = static_cast<const char*>(message.data());
-    uint8_t messageType = static_cast<uint8_t>(data[0]);
+    uint8_t messageType = static_cast<uint8_t>(*static_cast<const char*>(type_msg.data()));
     
     // Handle VIDEO_FRAME specially (no protobuf)
     if (messageType == static_cast<uint8_t>(Spider2::MessageType::VIDEO_FRAME)) {
@@ -237,7 +250,7 @@ void RobotController::processIncomingMessage(const zmq::message_t &message)
     }
     
     // Process protobuf messages
-    std::string protobufData(data + 1, message.size() - 1);
+    std::string protobufData(static_cast<const char*>(data_msg.data()), data_msg.size());
     
     switch (static_cast<Spider2::MessageType>(messageType)) {
         case Spider2::MessageType::TELEMETRY_UPDATE: {
@@ -284,6 +297,22 @@ void RobotController::processIncomingMessage(const zmq::message_t &message)
                 gyroData["y"] = gyro.y();
                 m_telemetryData["gyro"] = gyroData;
                 emit telemetryDataChanged();
+            }
+            break;
+        }
+        case Spider2::MessageType::HEIGHT_COMMAND: {
+            Command::HeightCommand cmd;
+            if (cmd.ParseFromString(protobufData)) {
+                qDebug() << "Height command received:" << cmd.height();
+                // TODO: Process height command response
+            }
+            break;
+        }
+        case Spider2::MessageType::WALKING_STYLE_COMMAND: {
+            Command::WalkingStyleCommand cmd;
+            if (cmd.ParseFromString(protobufData)) {
+                qDebug() << "Walking style command received:" << cmd.style();
+                // TODO: Process walking style command response
             }
             break;
         }
