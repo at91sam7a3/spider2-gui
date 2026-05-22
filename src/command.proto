@@ -2,9 +2,9 @@ syntax = "proto2";
 package Command;
 
 message MoveCommand{
-    required float forwardSpeed = 1;
-    required float strafeSpeed = 2;
-    required float rotationSpeed = 3;
+    required float forwardSpeed = 1;   // m/s, range: -2.0 to 2.0
+    required float strafeSpeed = 2;    // m/s, range: -2.0 to 2.0
+    required float rotationSpeed = 3;  // rad/s, range: -1.0 to 1.0
 }
 
 
@@ -36,9 +36,34 @@ message Heartbeat{
 }
 
 message HeightCommand{
-    required float height = 1;
+    required float height = 1;  // meters, range: 0.1 to 0.4
 }
 
 message WalkingStyleCommand{
-    required int32 style = 1;  // 1, 2, or 3
+    required int32 style = 1;  // 1=TwoLegs, 2=ThreeLegs, 3=Wave
+}
+
+message ServoTorqueCommand{
+    required bool enabled = 1;  // true = load (torque on), false = unload (torque off)
+}
+
+message VideoFrame{
+    required int64 timestamp = 1;  // Unix epoch milliseconds
+    required bytes data = 2;       // JPEG-encoded frame
+    required int32 width = 3;      // Frame width in pixels (640)
+    required int32 height = 4;     // Frame height in pixels (480)
+}
+
+message SlamPose{
+    required int64 timestamp = 1;
+    required double x_mm = 2;         // X position in millimeters
+    required double y_mm = 3;         // Y position in millimeters
+    required double theta_deg = 4;    // Orientation in degrees
+}
+
+message SlamMap{
+    required int64 timestamp = 1;
+    required int32 size_pixels = 2;   // Map size (square)
+    required double size_meters = 3;  // Physical size in meters
+    required bytes data = 4;          // Map pixel data (size_pixels^2 bytes)
 }

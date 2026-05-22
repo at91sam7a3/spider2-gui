@@ -1,10 +1,13 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QQmlComponent>
+#include <QQmlError>
 #include <QQmlContext>
 #include "RobotController.h"
 #include "VideoProvider.h"
 #include "LidarController.h"
 #include "GyroController.h"
+#include "SlamController.h"
 
 int main(int argc, char *argv[])
 {
@@ -14,23 +17,57 @@ int main(int argc, char *argv[])
     qmlRegisterType<RobotController>("Spider2", 1, 0, "RobotController");
     qmlRegisterType<LidarController>("Spider2", 1, 0, "LidarController");
     qmlRegisterType<GyroController>("Spider2", 1, 0, "GyroController");
+    qmlRegisterType<SlamController>("Spider2", 1, 0, "SlamController");
     
     // Create and register video provider
-    VideoProvider *videoProvider = new VideoProvider();
+    VideoProvider *videoProvider = new VideoProvider(&app);
     
     QQmlApplicationEngine engine;
     
     // Register image provider
     engine.addImageProvider("video", videoProvider);
     
-    const QUrl url(QStringLiteral("qrc:/spider2-gui/res/qml/MainSimple.qml"));
+    // Handle QML loading errors
     QObject::connect(
         &engine,
         &QQmlApplicationEngine::objectCreationFailed,
         &app,
-        []() { QCoreApplication::exit(-1); },
+        []() { 
+            qCritical() << "QML Engine: Object creation failed";
+            QCoreApplication::exit(-1); 
+        },
         Qt::QueuedConnection);
-    engine.load(url);
+    
+    // Load the QML file (QQmlComponent::errors() — engine.errors() is not in Qt 6.8)
+    const QUrl url(QStringLiteral("qrc:/spider2-gui/res/qml/MainSimple.qml"));
+    QQmlComponent component(&engine, url);
+    if (component.isError()) {
+        qCritical() << "QML Engine: Failed to load" << url.toString();
+        for (const QQmlError &error : component.errors()) {
+            qCritical() << "QML Error:" << error.toString();
+        }
+        return -1;
+    }
+
+    QObject *rootObject = component.create();
+    if (!rootObject) {
+        qCritical() << "QML Engine: Failed to create root object from" << url;
+        return -1;
+    }
+
+    // Set up the video provider on the root object
+    if (rootObject) {
+        RobotController *robotController = rootObject->findChild<RobotController*>("robotController");
+        if (robotController) {
+            robotController->setVideoProvider(videoProvider);
+            qInfo() << "Video provider connected to RobotController";
+        } else {
+            qWarning() << "Failed to find RobotController in QML";
+        }
+    } else {
+        qCritical() << "Failed to get root object from QML engine";
+        return -1;
+    }
 
     return app.exec();
 }

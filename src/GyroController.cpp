@@ -15,12 +15,10 @@ GyroController::GyroController(QObject *parent)
         emit latestZChanged();
     });
     
-    qDebug() << "GyroController: Initialized";
 }
 
 GyroController::~GyroController()
 {
-    qDebug() << "GyroController: Destroyed";
 }
 
 void GyroController::updateGyroData(float x, float y, float z, qint64 timestamp)
@@ -32,11 +30,9 @@ void GyroController::updateGyroData(float x, float y, float z, qint64 timestamp)
     GyroReading reading(x, y, z, timestamp);
     m_model->addReading(reading);
     
-    qDebug() << "GyroController: Updated with X:" << x << "Y:" << y << "Z:" << z;
 }
 
 void GyroController::clearData()
 {
     m_model->clearData();
-    qDebug() << "GyroController: Cleared all data";
 }

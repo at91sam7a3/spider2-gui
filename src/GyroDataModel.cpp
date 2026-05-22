@@ -66,7 +66,6 @@ void GyroDataModel::addReading(const GyroReading &reading)
     emit dataUpdated();
     emit newReading(reading);
     
-    qDebug() << "GyroDataModel: Added reading X:" << reading.x << "Y:" << reading.y << "Z:" << reading.z;
 }
 
 void GyroDataModel::clearData()
@@ -76,7 +75,6 @@ void GyroDataModel::clearData()
     endResetModel();
     emit dataUpdated();
     
-    qDebug() << "GyroDataModel: Cleared all data";
 }
 
 GyroReading GyroDataModel::getLatestReading() const

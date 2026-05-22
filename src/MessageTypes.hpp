@@ -15,14 +15,17 @@ namespace Spider2 {
  * and client applications. Each type corresponds to a specific protobuf message.
  */
 enum class MessageType : uint8_t {
-    MOVE_COMMAND = 1,        ///< Robot movement control command
-    TELEMETRY_UPDATE = 2,    ///< Sensor or status data update
-    LIDAR_DATA = 3,          ///< LiDAR sensor readings
-    GYRO_DATA = 4,           ///< Gyroscope/IMU data
-    HEARTBEAT = 5,           ///< Connection keep-alive message
-    VIDEO_FRAME = 6,         ///< Video frame data
-    HEIGHT_COMMAND = 7,      ///< Robot height control command
-    WALKING_STYLE_COMMAND = 8 ///< Robot walking style command
+    HEARTBEAT = 0x00,           ///< Connection keep-alive message (bidirectional)
+    MOVE_COMMAND = 0x01,        ///< Robot movement control command
+    TELEMETRY_UPDATE = 0x02,    ///< System telemetry/health data
+    GYRO_DATA = 0x03,           ///< Gyroscope/IMU data
+    LIDAR_DATA = 0x04,          ///< LiDAR sensor readings
+    VIDEO_FRAME = 0x05,         ///< Video frame data (JPEG-encoded)
+    HEIGHT_COMMAND = 0x06,       ///< Robot height control command
+    WALKING_STYLE_COMMAND = 0x07, ///< Robot walking style/gait command
+    SERVO_TORQUE_COMMAND = 0x08, ///< Enable/disable servo torque (broadcast)
+    SLAM_POSE = 0x09,           ///< SLAM position estimate
+    SLAM_MAP = 0x0A             ///< SLAM map data
 };
 
 /**
@@ -218,6 +221,36 @@ namespace MessageFactory {
         }
         
         return heartbeat;
+    }
+
+    inline Command::SlamPose createSlamPose(double x_mm, double y_mm,
+                                            double theta_deg,
+                                            int64_t timestamp = 0) {
+        Command::SlamPose pose;
+        if (timestamp == 0) {
+            timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+        }
+        pose.set_timestamp(timestamp);
+        pose.set_x_mm(x_mm);
+        pose.set_y_mm(y_mm);
+        pose.set_theta_deg(theta_deg);
+        return pose;
+    }
+
+    inline Command::SlamMap createSlamMap(int size_pixels, double size_meters,
+                                          const std::vector<char>& data,
+                                          int64_t timestamp = 0) {
+        Command::SlamMap map;
+        if (timestamp == 0) {
+            timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+        }
+        map.set_timestamp(timestamp);
+        map.set_size_pixels(size_pixels);
+        map.set_size_meters(size_meters);
+        map.set_data(data.data(), data.size());
+        return map;
     }
 }
 

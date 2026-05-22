@@ -1,40 +1,42 @@
 #pragma once
 
 #include <QObject>
-#include <QTimer>
+#include <QVariantList>
+#include <deque>
 #include "LidarDataModel.h"
 
-/**
- * @brief Controller for lidar data visualization
- * 
- * This controller manages the lidar data model and provides
- * an interface for updating lidar readings from incoming messages.
- */
 class LidarController : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(LidarDataModel* model READ model NOTIFY modelChanged)
+    Q_PROPERTY(QVariantList pointsXY READ pointsXY NOTIFY pointsXYChanged)
     Q_PROPERTY(int pointCount READ pointCount NOTIFY pointCountChanged)
     Q_PROPERTY(bool hasData READ hasData NOTIFY hasDataChanged)
 
 public:
+    static constexpr int MERGE_FRAMES = 3;  // number of revolutions to blend together
+
     explicit LidarController(QObject *parent = nullptr);
     ~LidarController();
 
-    // Property getters
-    LidarDataModel* model() const { return m_model; }
-    int pointCount() const { return m_model->pointCount(); }
-    bool hasData() const { return m_model->pointCount() > 0; }
+    QVariantList pointsXY()   const { return m_pointsXY; }
+    int          pointCount() const { return m_pointCount; }
+    bool         hasData()    const { return m_pointCount > 0; }
 
 public slots:
     void updateLidarData(const QVector<LidarPoint> &points);
     void clearData();
 
 signals:
-    void modelChanged();
+    void pointsXYChanged();
     void pointCountChanged();
     void hasDataChanged();
 
 private:
-    LidarDataModel *m_model;
+    // Rolling buffer of the last MERGE_FRAMES revolutions
+    std::deque<QVector<LidarPoint>> m_frameBuffer;
+
+    QVariantList m_pointsXY;
+    int          m_pointCount{0};
+
+    void rebuildPointsXY();
 };

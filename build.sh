@@ -38,8 +38,8 @@ fi
 # Check for required tools
 print_status "Checking for required tools..."
 
-# Check for conan
-if ! command -v conan &> /dev/null; then
+# Check for conan2
+if ! command -v conan2 &> /dev/null; then
     print_error "Conan is not installed. Please install Conan first:"
     echo "pip install conan"
     exit 1
@@ -69,15 +69,15 @@ mkdir -p bin
 print_status "Configuring Conan 2 for x86_64..."
 
 # Check if default profile exists, create if it doesn't
-if ! conan profile show -pr default > /dev/null 2>&1; then
+if ! conan2 profile show -pr default > /dev/null 2>&1; then
     print_status "Creating default profile..."
-    conan profile detect --name default
+    conan2 profile detect --name default
 else
     print_status "Using existing default profile..."
 fi
 
 # Check current profile architecture
-CURRENT_PROFILE=$(conan profile show -pr default | grep "arch=" | head -1 | cut -d'=' -f2 || echo "unknown")
+CURRENT_PROFILE=$(conan2 profile show -pr default | grep "arch=" | head -1 | cut -d'=' -f2 || echo "unknown")
 print_status "Current Conan profile architecture: $CURRENT_PROFILE"
 
 if [ "$CURRENT_PROFILE" != "x86_64" ]; then
@@ -92,7 +92,7 @@ fi
 # Install Conan dependencies
 print_status "Installing Conan dependencies..."
 cd build
-conan install .. --build=missing --update --output-folder=.
+conan2 install .. --build=missing --update --output-folder=.
 
 if [ $? -ne 0 ]; then
     print_error "Failed to install Conan dependencies"

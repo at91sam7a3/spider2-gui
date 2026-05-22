@@ -6,23 +6,39 @@ project(spider2-gui VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Find required packages
-find_package(Qt6 REQUIRED COMPONENTS Core Quick Gui QuickControls2 QuickTemplates2)
-find_package(Protobuf REQUIRED)
-find_package(PkgConfig REQUIRED)
+# Conan toolchain: pass -DCMAKE_TOOLCHAIN_FILE=<build-dir>/conan_toolchain.cmake on the
+# cmake command line (build.bat does this), or run conan2 install into CMAKE_BINARY_DIR.
+if(EXISTS "${CMAKE_BINARY_DIR}/conan_toolchain.cmake")
+    include("${CMAKE_BINARY_DIR}/conan_toolchain.cmake")
+elseif(NOT CMAKE_TOOLCHAIN_FILE)
+    if(NOT CMAKE_BUILD_TYPE)
+        set(_conan_build_type "Debug")
+    else()
+        set(_conan_build_type "${CMAKE_BUILD_TYPE}")
+    endif()
+    message(FATAL_ERROR
+        "Conan toolchain missing in ${CMAKE_BINARY_DIR}.\n"
+        "1) Install dependencies (match your Qt Creator build type, e.g. ${_conan_build_type}):\n"
+        "  conan2 install ${CMAKE_SOURCE_DIR} -s build_type=${_conan_build_type} "
+        "--output-folder=\"${CMAKE_BINARY_DIR}\" --build=missing\n"
+        "2) Reconfigure with Visual Studio 17 2022 (Ninja is incompatible with Conan on MSVC):\n"
+        "  -DCMAKE_TOOLCHAIN_FILE=\"${CMAKE_BINARY_DIR}/conan_toolchain.cmake\" "
+        "-DCMAKE_PREFIX_PATH=C:/Qt/6.8.0/msvc2022_64\n"
+        "Or run: qtcreator_setup.bat ${_conan_build_type}")
+endif()
 
 # Enable Qt6 automatic MOC, UIC, and RCC
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-# Include Conan generated files
-include(${CMAKE_BINARY_DIR}/conan_toolchain.cmake)
+# Find required packages
+find_package(Qt6 REQUIRED COMPONENTS Core Quick Gui QuickControls2 QuickTemplates2)
 
 # Find Conan packages
-find_package(ZeroMQ REQUIRED)
+find_package(ZeroMQ REQUIRED CONFIG)
 find_package(cppzmq REQUIRED)
-find_package(protobuf REQUIRED)
+find_package(protobuf REQUIRED CONFIG)
 
 # Protobuf configuration
 set(PROTOBUF_GENERATE_CPP_APPEND_PATH TRUE)
@@ -59,6 +75,9 @@ set(QML_FILES
     res/qml/MainSimple.qml
     res/qml/LidarDisplay.qml
     res/qml/GyroDisplay.qml
+    res/qml/ArtificialHorizon.qml
+    res/qml/DataStreamIndicator.qml
+    res/qml/SensorDataDisplay.qml
 )
 
 # Source files
@@ -70,6 +89,7 @@ set(SOURCES
     src/LidarDataModel.cpp
     src/GyroController.cpp
     src/GyroDataModel.cpp
+    src/SlamController.cpp
 )
 
 set(HEADERS
@@ -80,6 +100,7 @@ set(HEADERS
     src/LidarDataModel.h
     src/GyroController.h
     src/GyroDataModel.h
+    src/SlamController.h
 )
 
 # Create executable
@@ -100,7 +121,6 @@ target_link_libraries(spider2-gui PRIVATE
     Qt6::QuickTemplates2
     protobuf_generated
     protobuf::libprotobuf
-    libzmq-static
     cppzmq
 )
 

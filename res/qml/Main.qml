@@ -66,6 +66,30 @@ Window {
             }
         }
         
+        // Sensor Data Block - Top Right
+        SensorDataDisplay {
+            id: sensorDataDisplay
+            width: 210
+            height: 210
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.margins: 10
+
+            telemetryData: robotController.telemetryData
+        }
+
+        // Data Reception Indicators - Top Center
+        DataIndicators {
+            id: dataIndicators
+            width: 320
+            height: 80
+            anchors.top: parent.top
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.topMargin: 10
+            
+            telemetryData: robotController.telemetryData
+        }
+        
         // Connection status indicator
         Rectangle {
             id: connectionStatus

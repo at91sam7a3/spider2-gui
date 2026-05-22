@@ -56,7 +56,6 @@ void LidarDataModel::updateData(const QVector<LidarPoint> &points)
     endResetModel();
     emit dataUpdated();
     
-    qDebug() << "LidarDataModel: Updated with" << points.size() << "points";
 }
 
 void LidarDataModel::clearData()
@@ -66,5 +65,4 @@ void LidarDataModel::clearData()
     endResetModel();
     emit dataUpdated();
     
-    qDebug() << "LidarDataModel: Cleared all data";
 }

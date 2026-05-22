@@ -2,21 +2,36 @@
 #include <QDebug>
 #include <QThread>
 #include <QCoreApplication>
+#include <QDateTime>
 #include <zmq.hpp>
 #include <zmq_addon.hpp>
 #include "command.pb.h"
 #include "LidarDataModel.h"
 #include "GyroDataModel.h"
+#include "SlamController.h"
+#include "VideoProvider.h"
 
 RobotController::RobotController(QObject *parent)
     : QObject(parent)
     , m_context(std::make_unique<zmq::context_t>(1))
     , m_lidarController(new LidarController(this))
     , m_gyroController(new GyroController(this))
+    , m_slamController(new SlamController(this))
     , m_heartbeatTimer(new QTimer(this))
 {
     m_heartbeatTimer->setInterval(1000); // Send heartbeat every second
     connect(m_heartbeatTimer, &QTimer::timeout, this, &RobotController::sendHeartbeat);
+
+    m_streamHealthTimer = new QTimer(this);
+    m_streamHealthTimer->setInterval(200);
+    connect(m_streamHealthTimer, &QTimer::timeout, this, &RobotController::updateStreamHealth);
+    m_streamHealthTimer->start();
+    
+    // Data statistics timer: update every 1 second
+    m_statisticsTimer = new QTimer(this);
+    m_statisticsTimer->setInterval(1000);
+    connect(m_statisticsTimer, &QTimer::timeout, this, &RobotController::updateDataStatistics);
+    m_statisticsTimer->start();
 }
 
 RobotController::~RobotController()
@@ -35,7 +50,7 @@ void RobotController::setServerIp(const QString &ip)
 void RobotController::setForwardSpeed(float speed)
 {
     if (qAbs(m_forwardSpeed - speed) > 0.001f) {
-        m_forwardSpeed = qBound(-1.0f, speed, 1.0f);
+        m_forwardSpeed = qBound(-2.0f, speed, 2.0f);  // Range: -2.0 to 2.0 m/s
         emit forwardSpeedChanged();
         
         if (m_connected) {
@@ -48,7 +63,7 @@ void RobotController::setForwardSpeed(float speed)
 void RobotController::setStrafeSpeed(float speed)
 {
     if (qAbs(m_strafeSpeed - speed) > 0.001f) {
-        m_strafeSpeed = qBound(-1.0f, speed, 1.0f);
+        m_strafeSpeed = qBound(-2.0f, speed, 2.0f);  // Range: -2.0 to 2.0 m/s
         emit strafeSpeedChanged();
         
         if (m_connected) {
@@ -61,7 +76,7 @@ void RobotController::setStrafeSpeed(float speed)
 void RobotController::setRotationSpeed(float speed)
 {
     if (qAbs(m_rotationSpeed - speed) > 0.001f) {
-        m_rotationSpeed = qBound(-1.0f, speed, 1.0f);
+        m_rotationSpeed = qBound(-1.0f, speed, 1.0f);  // Range: -1.0 to 1.0 rad/s
         emit rotationSpeedChanged();
         
         if (m_connected) {
@@ -73,8 +88,8 @@ void RobotController::setRotationSpeed(float speed)
 
 void RobotController::setHeight(float height)
 {
-    if (qAbs(m_height - height) > 0.001f) {
-        m_height = height;
+    if (qAbs(m_height - height) > 0.1f) {
+        m_height = qBound(40.0f, height, 150.0f);  // Range: 40..150 mm
         emit heightChanged();
         
         if (m_connected) {
@@ -99,6 +114,11 @@ void RobotController::setWalkingStyle(int style)
     }
 }
 
+void RobotController::setVideoProvider(VideoProvider *provider)
+{
+    m_videoProvider = provider;
+}
+
 void RobotController::connectToRobot()
 {
     if (m_serverIp.isEmpty()) {
@@ -114,16 +134,17 @@ void RobotController::connectToRobot()
         m_socket->connect(connectionString.toStdString());
         
         m_connected = true;
+        resetStreamHealth();
         emit connectedChanged();
         
         startCommunicationThread();
         m_heartbeatTimer->start();
         
-        qDebug() << "Connected to robot at" << m_serverIp;
-        
+        qInfo() << "[ROBOT] Connected to" << m_serverIp;
+
     } catch (const zmq::error_t &e) {
         emit connectionError(QString("Failed to connect: %1").arg(e.what()));
-        qDebug() << "Connection error:" << e.what();
+        qWarning() << "[ROBOT] Connection error:" << e.what();
     }
 }
 
@@ -139,10 +160,21 @@ void RobotController::disconnectFromRobot()
         }
         
         m_connected = false;
+        resetStreamHealth();
         emit connectedChanged();
         
-        qDebug() << "Disconnected from robot";
+        qInfo() << "[ROBOT] Disconnected";
     }
+}
+
+void RobotController::setServoTorque(bool enabled)
+{
+    if (!m_connected) return;
+
+    Command::ServoTorqueCommand cmd;
+    cmd.set_enabled(enabled);
+    sendMessage(Spider2::MessageType::SERVO_TORQUE_COMMAND, cmd);
+    qInfo() << "[ROBOT] Servo torque" << (enabled ? "ON" : "OFF") << "sent";
 }
 
 void RobotController::sendHeartbeat()
@@ -169,39 +201,65 @@ void RobotController::stopCommunicationThread()
 
 void RobotController::communicationLoop()
 {
-    zmq::pollitem_t items[] = {
-        { *m_socket, 0, ZMQ_POLLIN, 0 }
+    // Stream message types: only the LATEST received matters for display.
+    // When a backlog builds up, we drain all queued messages and throw away
+    // everything except the most recent one of each stream type.
+    auto isStream = [](uint8_t t) -> bool {
+        return t == static_cast<uint8_t>(Spider2::MessageType::LIDAR_DATA)
+            || t == static_cast<uint8_t>(Spider2::MessageType::GYRO_DATA)
+            || t == static_cast<uint8_t>(Spider2::MessageType::VIDEO_FRAME)
+            || t == static_cast<uint8_t>(Spider2::MessageType::TELEMETRY_UPDATE)
+            || t == static_cast<uint8_t>(Spider2::MessageType::SLAM_POSE)
+            || t == static_cast<uint8_t>(Spider2::MessageType::SLAM_MAP);
     };
+
+    zmq::pollitem_t items[] = {{ *m_socket, 0, ZMQ_POLLIN, 0 }};
 
     while (m_running) {
         try {
+            // Block until at least one message arrives (or timeout for heartbeat check)
             zmq::poll(items, 1, std::chrono::milliseconds(100));
-            
-            if (items[0].revents & ZMQ_POLLIN) {
-                // Receive identity frame first (ROUTER/DEALER pattern)
-                zmq::message_t identity;
-                auto result = m_socket->recv(identity, zmq::recv_flags::dontwait);
+            if (!(items[0].revents & ZMQ_POLLIN)) continue;
+
+            // Drain ALL queued messages in one tight non-blocking loop.
+            // Stream messages: overwrite with latest (old frames simply discarded).
+            // Non-stream messages (heartbeat etc.): keep all in order.
+            std::unordered_map<uint8_t, std::string> latest;
+            std::vector<std::pair<uint8_t, std::string>> ordered;
+
+            while (true) {
+                zmq::message_t type_msg;
+                if (!m_socket->recv(type_msg, zmq::recv_flags::dontwait)) break;
+                if (type_msg.size() != 1) break;
+
+                zmq::message_t data_msg;
+                if (!m_socket->recv(data_msg, zmq::recv_flags::dontwait)) break;
+
+                uint8_t t = *static_cast<const uint8_t*>(type_msg.data());
+                std::string d(static_cast<const char*>(data_msg.data()), data_msg.size());
                 
-                if (result) {
-                    // Receive message type second
-                    zmq::message_t type_msg;
-                    result = m_socket->recv(type_msg, zmq::recv_flags::dontwait);
-                    
-                    if (result && type_msg.size() == 1) {
-                        // Receive message data third
-                        zmq::message_t data_msg;
-                        result = m_socket->recv(data_msg, zmq::recv_flags::dontwait);
-                        
-                        if (result) {
-                            processIncomingMessage(type_msg, data_msg);
-                        }
-                    }
+                // Track bytes and messages received for statistics
+                m_bytesReceivedCounter.fetch_add(d.size(), std::memory_order_relaxed);
+                m_messagesReceivedCounter.fetch_add(1, std::memory_order_relaxed);
+
+                if (isStream(t)) {
+                    latest[t] = std::move(d);      // overwrite: keep only newest
+                } else {
+                    ordered.emplace_back(t, std::move(d));
                 }
             }
+
+            // Process non-stream messages first (heartbeats, acks …)
+            for (auto &[t, d] : ordered)
+                dispatchMessage(t, d);
+
+            // Process one (the latest) message per stream type
+            for (auto &[t, d] : latest)
+                dispatchMessage(t, d);
+
         } catch (const zmq::error_t &e) {
-            if (e.num() != ETERM) {
-                qDebug() << "Communication error:" << e.what();
-            }
+            if (e.num() != ETERM)
+                qWarning() << "[ROBOT] Communication error:" << e.what();
             break;
         }
     }
@@ -228,103 +286,231 @@ void RobotController::sendMessage(Spider2::MessageType type, const google::proto
         m_socket->send(data_msg, zmq::send_flags::dontwait);
         
     } catch (const zmq::error_t &e) {
-        qDebug() << "Failed to send message:" << e.what();
+        qWarning() << "[ROBOT] Send error:" << e.what();
     } catch (const std::exception &e) {
-        qDebug() << "Failed to serialize message:" << e.what();
+        qWarning() << "[ROBOT] Serialize error:" << e.what();
     }
 }
 
-void RobotController::processIncomingMessage(const zmq::message_t &type_msg, const zmq::message_t &data_msg)
+void RobotController::dispatchMessage(uint8_t messageType, const std::string &rawData)
 {
-    if (type_msg.size() != 1) {
-        return;
-    }
-
-    uint8_t messageType = static_cast<uint8_t>(*static_cast<const char*>(type_msg.data()));
-    
-    // Handle VIDEO_FRAME specially (no protobuf)
+    // Handle VIDEO_FRAME specially (raw JPEG wrapped in protobuf)
     if (messageType == static_cast<uint8_t>(Spider2::MessageType::VIDEO_FRAME)) {
-        // For now, we don't process video frames
-        // In the future, this would update the VideoProvider
+        try {
+            Command::VideoFrame videoFrame;
+            const std::string &frameData = rawData;
+            
+            if (videoFrame.ParseFromString(frameData)) {
+                // Create QImage from JPEG data
+                QByteArray jpegData(videoFrame.data().data(), videoFrame.data().size());
+                QImage image = QImage::fromData(jpegData, "JPEG");
+                
+                if (!image.isNull()) {
+                    // Marshal frame update and counter increment to the GUI thread
+                    QMetaObject::invokeMethod(this, [this, image]() {
+                        if (m_videoProvider) {
+                            m_videoProvider->updateVideoFrame(image);
+                        }
+                        m_videoFrameIndex.fetch_add(1, std::memory_order_relaxed);
+                        emit videoFrameIndexChanged();
+                    }, Qt::QueuedConnection);
+                } else {
+                    qWarning() << "[VIDEO] Failed to decode JPEG data (" << jpegData.size() << "bytes)";
+                }
+            }
+            } catch (const std::exception &e) {
+            qWarning() << "[VIDEO] Error processing frame:" << e.what();
+        }
         return;
     }
     
     // Process protobuf messages
-    std::string protobufData(static_cast<const char*>(data_msg.data()), data_msg.size());
+    const std::string &protobufData = rawData;
     
     switch (static_cast<Spider2::MessageType>(messageType)) {
         case Spider2::MessageType::TELEMETRY_UPDATE: {
             Command::TelemetryUpdate telemetry;
             if (telemetry.ParseFromString(protobufData)) {
-                updateTelemetry(telemetry);
+                // Copy by value so the lambda captures a self-contained object
+                QMetaObject::invokeMethod(this, [this, telemetry]() {
+                    updateTelemetry(telemetry);
+                }, Qt::QueuedConnection);
             }
             break;
         }
         case Spider2::MessageType::LIDAR_DATA: {
             Command::LidarData lidar;
             if (lidar.ParseFromString(protobufData)) {
-                // Convert protobuf data to LidarPoint vector
-                QVector<LidarPoint> points;
-                int count = std::min(lidar.angles_size(), lidar.distances_size());
-                
-                for (int i = 0; i < count; i++) {
-                    points.append(LidarPoint(lidar.angles(i), lidar.distances(i)));
+                const int nPts = lidar.angles_size();
+                if (nPts >= 1 && nPts == lidar.distances_size()) {
+                    // Collect valid points; zero/out-of-range distances mean no return
+                    QVector<LidarPoint> points;
+                    points.reserve(nPts);
+                    for (int i = 0; i < nPts; ++i) {
+                        float distance = lidar.distances(i);
+                        if (distance >= 0.1f && distance <= 10.0f) {
+                            points.append(LidarPoint(lidar.angles(i), distance));
+                        }
+                    }
+
+                    const qint64 ts = static_cast<qint64>(lidar.timestamp());
+                    QMetaObject::invokeMethod(this, [this, points, ts, nPts]() {
+                        if (!points.isEmpty()) {
+                            m_lidarController->updateLidarData(points);
+                            markLidarReceived();
+                        } else {
+                            qWarning() << "[LIDAR] all" << nPts << "points filtered out";
+                        }
+                        QVariantMap lidarData;
+                        lidarData["timestamp"] = ts;
+                        lidarData["point_count"] = points.size();
+                        m_telemetryData["lidar"] = lidarData;
+                        emit telemetryDataChanged();
+                    }, Qt::QueuedConnection);
+                } else {
+                    qWarning() << "LIDAR: malformed message — angles:" << nPts
+                               << "distances:" << lidar.distances_size();
                 }
-                
-                // Update lidar controller
-                m_lidarController->updateLidarData(points);
-                
-                // Store lidar data in telemetry
-                QVariantMap lidarData;
-                lidarData["timestamp"] = static_cast<qint64>(lidar.timestamp());
-                lidarData["angle_count"] = lidar.angles_size();
-                lidarData["distance_count"] = lidar.distances_size();
-                m_telemetryData["lidar"] = lidarData;
-                emit telemetryDataChanged();
+            } else {
+                qWarning() << "LIDAR: failed to parse protobuf";
             }
             break;
         }
         case Spider2::MessageType::GYRO_DATA: {
             Command::GyroData gyro;
             if (gyro.ParseFromString(protobufData)) {
-                // Update gyro controller
-                m_gyroController->updateGyroData(gyro.x(), gyro.y(), 0.0f, gyro.timestamp());
-                
-                // Store gyro data in telemetry
-                QVariantMap gyroData;
-                gyroData["timestamp"] = static_cast<qint64>(gyro.timestamp());
-                gyroData["x"] = gyro.x();
-                gyroData["y"] = gyro.y();
-                m_telemetryData["gyro"] = gyroData;
-                emit telemetryDataChanged();
+                const float gx = gyro.x();
+                const float gy = gyro.y();
+                const qint64 ts = static_cast<qint64>(gyro.timestamp());
+                QMetaObject::invokeMethod(this, [this, gx, gy, ts]() {
+                    // Z-axis is not in the protocol; use 0.0
+                    m_gyroController->updateGyroData(gx, gy, 0.0f, ts);
+                    markGyroReceived();
+                    QVariantMap gyroData;
+                    gyroData["timestamp"] = ts;
+                    gyroData["x"] = gx;
+                    gyroData["y"] = gy;
+                    m_telemetryData["gyro"] = gyroData;
+                    emit telemetryDataChanged();
+                }, Qt::QueuedConnection);
             }
             break;
         }
-        case Spider2::MessageType::HEIGHT_COMMAND: {
-            Command::HeightCommand cmd;
-            if (cmd.ParseFromString(protobufData)) {
-                qDebug() << "Height command received:" << cmd.height();
-                // TODO: Process height command response
-            }
+        case Spider2::MessageType::HEARTBEAT: {
             break;
         }
-        case Spider2::MessageType::WALKING_STYLE_COMMAND: {
-            Command::WalkingStyleCommand cmd;
-            if (cmd.ParseFromString(protobufData)) {
-                qDebug() << "Walking style command received:" << cmd.style();
-                // TODO: Process walking style command response
+        case Spider2::MessageType::SLAM_POSE: {
+            Command::SlamPose slamPose;
+            if (slamPose.ParseFromString(protobufData)) {
+                const double x = slamPose.x_mm();
+                const double y = slamPose.y_mm();
+                const double theta = slamPose.theta_deg();
+                QMetaObject::invokeMethod(this, [this, x, y, theta]() {
+                    m_slamController->updatePose(x, y, theta);
+                    markSlamReceived();
+                }, Qt::QueuedConnection);
             }
             break;
         }
         default:
-            qDebug() << "Unknown message type:" << messageType;
+            qWarning() << "[ROBOT] Unknown message type:" << messageType;
             break;
     }
+}
+
+bool RobotController::isVoltageTelemetry(const QString &name)
+{
+    return name.compare(QStringLiteral("battery_voltage"), Qt::CaseInsensitive) == 0
+        || name.contains(QStringLiteral("voltage"), Qt::CaseInsensitive);
+}
+
+void RobotController::markLidarReceived()
+{
+    m_lastLidarMs.store(QDateTime::currentMSecsSinceEpoch(), std::memory_order_relaxed);
+    QMetaObject::invokeMethod(this, &RobotController::updateStreamHealth, Qt::QueuedConnection);
+}
+
+void RobotController::markGyroReceived()
+{
+    m_lastGyroMs.store(QDateTime::currentMSecsSinceEpoch(), std::memory_order_relaxed);
+    QMetaObject::invokeMethod(this, &RobotController::updateStreamHealth, Qt::QueuedConnection);
+}
+
+void RobotController::markSlamReceived()
+{
+    m_lastSlamMs.store(QDateTime::currentMSecsSinceEpoch(), std::memory_order_relaxed);
+    QMetaObject::invokeMethod(this, &RobotController::updateStreamHealth, Qt::QueuedConnection);
+}
+
+void RobotController::markSensorsReceived()
+{
+    m_lastSensorsMs.store(QDateTime::currentMSecsSinceEpoch(), std::memory_order_relaxed);
+    QMetaObject::invokeMethod(this, &RobotController::updateStreamHealth, Qt::QueuedConnection);
+}
+
+void RobotController::resetStreamHealth()
+{
+    m_lastLidarMs.store(0, std::memory_order_relaxed);
+    m_lastGyroMs.store(0, std::memory_order_relaxed);
+    m_lastSlamMs.store(0, std::memory_order_relaxed);
+    m_lastSensorsMs.store(0, std::memory_order_relaxed);
+
+    const bool changed = m_lidarStreamActive || m_gyroStreamActive
+                         || m_slamStreamActive || m_sensorsStreamActive;
+    m_lidarStreamActive = false;
+    m_gyroStreamActive = false;
+    m_slamStreamActive = false;
+    m_sensorsStreamActive = false;
+    if (changed) {
+        emit streamHealthChanged();
+    }
+}
+
+void RobotController::updateStreamHealth()
+{
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    bool changed = false;
+
+    auto updateOne = [&](std::atomic<qint64> &lastMs, bool &active) {
+        const qint64 last = lastMs.load(std::memory_order_relaxed);
+        const bool shouldBeActive = last > 0 && (now - last) < STREAM_TIMEOUT_MS;
+        if (active != shouldBeActive) {
+            active = shouldBeActive;
+            changed = true;
+        }
+    };
+
+    updateOne(m_lastLidarMs, m_lidarStreamActive);
+    updateOne(m_lastGyroMs, m_gyroStreamActive);
+    updateOne(m_lastSlamMs, m_slamStreamActive);
+    updateOne(m_lastSensorsMs, m_sensorsStreamActive);
+
+    if (changed) {
+        emit streamHealthChanged();
+    }
+}
+
+void RobotController::updateDataStatistics()
+{
+    // Get current counters and reset them for next second
+    uint64_t bytesReceived = m_bytesReceivedCounter.exchange(0, std::memory_order_relaxed);
+    uint64_t messagesReceived = m_messagesReceivedCounter.exchange(0, std::memory_order_relaxed);
+    
+    // Update telemetry with current per-second statistics
+    QMetaObject::invokeMethod(this, [this, bytesReceived, messagesReceived]() {
+        m_telemetryData["bytes_received_per_sec"] = static_cast<qulonglong>(bytesReceived);
+        m_telemetryData["messages_received_per_sec"] = static_cast<qulonglong>(messagesReceived);
+        emit telemetryDataChanged();
+    }, Qt::QueuedConnection);
 }
 
 void RobotController::updateTelemetry(const Command::TelemetryUpdate &telemetry)
 {
     QString name = QString::fromStdString(telemetry.name());
+
+    if (isVoltageTelemetry(name)) {
+        markSensorsReceived();
+    }
     
     if (telemetry.has_fvalue()) {
         m_telemetryData[name] = telemetry.fvalue();
