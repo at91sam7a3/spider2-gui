@@ -5,6 +5,7 @@
 #include <QQmlContext>
 #include "RobotController.h"
 #include "VideoProvider.h"
+#include "MapProvider.h"
 #include "LidarController.h"
 #include "GyroController.h"
 #include "SlamController.h"
@@ -19,13 +20,15 @@ int main(int argc, char *argv[])
     qmlRegisterType<GyroController>("Spider2", 1, 0, "GyroController");
     qmlRegisterType<SlamController>("Spider2", 1, 0, "SlamController");
     
-    // Create and register video provider
+    // Create and register providers
     VideoProvider *videoProvider = new VideoProvider(&app);
+    MapProvider *mapProvider = new MapProvider(&app);
     
     QQmlApplicationEngine engine;
     
-    // Register image provider
+    // Register image providers
     engine.addImageProvider("video", videoProvider);
+    engine.addImageProvider("map", mapProvider);
     
     // Handle QML loading errors
     QObject::connect(
@@ -60,7 +63,8 @@ int main(int argc, char *argv[])
         RobotController *robotController = rootObject->findChild<RobotController*>("robotController");
         if (robotController) {
             robotController->setVideoProvider(videoProvider);
-            qInfo() << "Video provider connected to RobotController";
+            robotController->setMapProvider(mapProvider);
+            qInfo() << "Video + Map providers connected to RobotController";
         } else {
             qWarning() << "Failed to find RobotController in QML";
         }

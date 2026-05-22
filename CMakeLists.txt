@@ -74,10 +74,12 @@ target_include_directories(protobuf_generated PUBLIC ${CMAKE_CURRENT_BINARY_DIR}
 set(QML_FILES
     res/qml/MainSimple.qml
     res/qml/LidarDisplay.qml
+    res/qml/MapDisplay.qml
     res/qml/GyroDisplay.qml
     res/qml/ArtificialHorizon.qml
     res/qml/DataStreamIndicator.qml
     res/qml/SensorDataDisplay.qml
+    res/qml/arrow.svg
 )
 
 # Source files
@@ -85,6 +87,7 @@ set(SOURCES
     src/main.cpp
     src/RobotController.cpp
     src/VideoProvider.cpp
+    src/MapProvider.cpp
     src/LidarController.cpp
     src/LidarDataModel.cpp
     src/GyroController.cpp
@@ -95,6 +98,7 @@ set(SOURCES
 set(HEADERS
     src/RobotController.h
     src/VideoProvider.h
+    src/MapProvider.h
     src/MessageTypes.hpp
     src/LidarController.h
     src/LidarDataModel.h

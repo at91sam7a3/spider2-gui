@@ -67,3 +67,13 @@ message SlamMap{
     required double size_meters = 3;  // Physical size in meters
     required bytes data = 4;          // Map pixel data (size_pixels^2 bytes)
 }
+
+message MoveToPointCommand{
+    required float target_x_mm = 1;
+    required float target_y_mm = 2;
+    optional float tolerance_mm = 3 [default = 50.0];
+}
+
+message RobotStateChange{
+    required string state = 1;  // "manual_control" or "move_to_point"
+}

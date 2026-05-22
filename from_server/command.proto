@@ -56,14 +56,24 @@ message VideoFrame{
 
 message SlamPose{
     required int64 timestamp = 1;
-    required double x_mm = 2;
-    required double y_mm = 3;
-    required double theta_deg = 4;
+    required double x_mm = 2;         // X position in millimeters
+    required double y_mm = 3;         // Y position in millimeters
+    required double theta_deg = 4;    // Orientation in degrees
 }
 
 message SlamMap{
     required int64 timestamp = 1;
-    required int32 size_pixels = 2;
-    required double size_meters = 3;
-    required bytes data = 4;
+    required int32 size_pixels = 2;   // Map size (square)
+    required double size_meters = 3;  // Physical size in meters
+    required bytes data = 4;          // Map pixel data (size_pixels^2 bytes)
+}
+
+message MoveToPointCommand{
+    required float target_x_mm = 1;
+    required float target_y_mm = 2;
+    optional float tolerance_mm = 3 [default = 50.0];
+}
+
+message RobotStateChange{
+    required string state = 1;  // "manual_control" or "move_to_point"
 }

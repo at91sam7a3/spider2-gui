@@ -12,7 +12,18 @@ Window {
     
     property alias robotController: robotController
     
-    // Robot controller instance
+    // Navigation mode toggle
+    property bool navMode: false
+
+    // Nav map pan/zoom state (inlined, no MapDisplay)
+    property real navPanX: 0
+    property real navPanY: 0
+    property real navZoom: 1.0
+
+    function setNavMode(mode) {
+        navMode = mode
+    }
+    
     RobotController {
         id: robotController
         objectName: "robotController"
@@ -23,7 +34,7 @@ Window {
         color: "black"
         focus: true
         
-        // Video background — source includes frame index so QML reloads on every new frame
+        // ── Layer 1: Video background (hidden in nav mode) ──
         Image {
             id: videoImage
             anchors.fill: parent
@@ -31,9 +42,11 @@ Window {
             fillMode: Image.PreserveAspectFit
             smooth: true
             cache: false
+            visible: !navMode
         }
         
-        // Simple connection dialog
+        // ── Layer 2: Full-window map (shown in nav mode) ──
+        // ── Connection dialog ──
         Rectangle {
             id: connectionDialog
             width: 350
@@ -45,7 +58,7 @@ Window {
             radius: 10
             visible: !robotController.connected
             
-            property string robotIp: "192.168.1.100"
+            property string robotIp: "spider.local"
             
             Column {
                 anchors.centerIn: parent
@@ -148,522 +161,618 @@ Window {
             }
         }
         
-        // Data stream health (green = received within 1s, red = stale)
-        Row {
-            id: streamHealthBar
-            anchors.top: parent.top
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.topMargin: 10
-            spacing: 10
-            visible: robotController.connected
+        // ── Overlay controls (hidden in nav mode) ──
+        Item {
+            anchors.fill: parent
+            visible: robotController.connected && !navMode
 
-            DataStreamIndicator {
-                label: "Lidar"
-                active: robotController.lidarStreamActive
-            }
-            DataStreamIndicator {
-                label: "Sensors"
-                active: robotController.sensorsStreamActive
-            }
-            DataStreamIndicator {
-                label: "Gyro"
-                active: robotController.gyroStreamActive
-            }
-            DataStreamIndicator {
-                label: "SLAM"
-                active: robotController.slamStreamActive
-            }
-        }
+            // Data stream health — top center
+            Row {
+                id: streamHealthBar
+                anchors.top: parent.top
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.topMargin: 10
+                spacing: 10
 
-        // Servo ON / OFF — left side, vertical center
-        Column {
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: 10
-            spacing: 8
-            visible: robotController.connected
+                DataStreamIndicator {
+                    label: "Lidar"
+                    active: robotController.lidarStreamActive
+                }
+                DataStreamIndicator {
+                    label: "Sensors"
+                    active: robotController.sensorsStreamActive
+                }
+                DataStreamIndicator {
+                    label: "Gyro"
+                    active: robotController.gyroStreamActive
+                }
+                DataStreamIndicator {
+                    label: "SLAM"
+                    active: robotController.slamStreamActive
+                }
+            }
 
-            // Servo ON
+            // Left column: Servo + NAV + Walking style + Robot state
+            Column {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: 10
+                spacing: 8
+
+                // Servo ON
+                Rectangle {
+                    width: 90; height: 40; radius: 6
+                    color: servoOnMA.pressed ? "#1a7a1a" : "#228b22"
+                    border.color: "#44ff44"; border.width: 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Servo ON"; color: "white"
+                        font.pixelSize: 13; font.bold: true
+                    }
+                    MouseArea {
+                        id: servoOnMA
+                        anchors.fill: parent
+                        onClicked: robotController.setServoTorque(true)
+                    }
+                }
+
+                // Servo OFF
+                Rectangle {
+                    width: 90; height: 40; radius: 6
+                    color: servoOffMA.pressed ? "#7a1a1a" : "#8b2222"
+                    border.color: "#ff4444"; border.width: 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Servo OFF"; color: "white"
+                        font.pixelSize: 13; font.bold: true
+                    }
+                    MouseArea {
+                        id: servoOffMA
+                        anchors.fill: parent
+                        onClicked: robotController.setServoTorque(false)
+                    }
+                }
+
+                // NAV toggle button
+                Rectangle {
+                    width: 90; height: 40; radius: 6
+                    color: navMode ? "#cc8800" : "#886622"
+                    border.color: navMode ? "#ffcc00" : "#aa8844"
+                    border.width: 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: navMode ? "MAP" : "NAV"
+                        color: "white"; font.pixelSize: 13; font.bold: true
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: mainWindow.setNavMode(!navMode)
+                    }
+                }
+
+                // Separator
+                Rectangle { width: 90; height: 1; color: "#444"; }
+
+                // ── Walking mode radio group ──
+                Text { text: "WALKING"; color: "#aaa"; font.pixelSize: 9; font.bold: true }
+
+                Repeater {
+                    model: [
+                        { label: "TwoLegs", style: 1 },
+                        { label: "ThreeLegs", style: 2 },
+                        { label: "Wave", style: 3 }
+                    ]
+                    Rectangle {
+                        width: 90; height: 26; radius: 4
+                        color: robotController.walkingStyle === modelData.style ? "#336633" : "#222"
+                        border.color: robotController.walkingStyle === modelData.style ? "#44ff44" : "#444"
+                        border.width: 1
+                        Text {
+                            anchors.centerIn: parent
+                            text: modelData.label
+                            color: robotController.walkingStyle === modelData.style ? "#44ff44" : "#888"
+                            font.pixelSize: 11
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: robotController.walkingStyle = modelData.style
+                        }
+                    }
+                }
+
+                // Separator
+                Rectangle { width: 90; height: 1; color: "#444"; }
+
+                // ── Robot state radio group ──
+                Text { text: "STATE"; color: "#aaa"; font.pixelSize: 9; font.bold: true }
+
+                Rectangle {
+                    width: 90; height: 26; radius: 4
+                    color: robotController.telemetryData["robot_state"] !== "move_to_point" ? "#336633" : "#222"
+                    border.color: robotController.telemetryData["robot_state"] !== "move_to_point" ? "#44ff44" : "#444"
+                    border.width: 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Manual"
+                        color: robotController.telemetryData["robot_state"] !== "move_to_point" ? "#44ff44" : "#888"
+                        font.pixelSize: 11
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: robotController.sendStateChange("manual_control")
+                    }
+                }
+
+                Rectangle {
+                    width: 90; height: 26; radius: 4
+                    color: robotController.telemetryData["robot_state"] === "move_to_point" ? "#336633" : "#222"
+                    border.color: robotController.telemetryData["robot_state"] === "move_to_point" ? "#44ff44" : "#444"
+                    border.width: 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Follow Pt"
+                        color: robotController.telemetryData["robot_state"] === "move_to_point" ? "#44ff44" : "#888"
+                        font.pixelSize: 11
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: robotController.sendStateChange("move_to_point")
+                    }
+                }
+            }
+
+            // Sensor data block — top right
+            SensorDataDisplay {
+                id: sensorDataDisplay
+                width: 220; height: 205
+                anchors.top: parent.top; anchors.right: parent.right
+                anchors.margins: 10
+                telemetryData: robotController.telemetryData
+            }
+
+            // Connection status
             Rectangle {
-                width: 90
-                height: 40
-                radius: 6
-                color: servoOnMA.pressed ? "#1a7a1a" : "#228b22"
-                border.color: "#44ff44"
-                border.width: 1
-
+                width: 150; height: 30
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right; anchors.margins: 10
+                color: robotController.connected ? "green" : "red"
+                opacity: 0.8; radius: 5
                 Text {
                     anchors.centerIn: parent
-                    text: "Servo ON"
-                    color: "white"
-                    font.pixelSize: 13
-                    font.bold: true
-                }
-
-                MouseArea {
-                    id: servoOnMA
-                    anchors.fill: parent
-                    onClicked: robotController.setServoTorque(true)
+                    text: robotController.connected ? "CONNECTED" : "DISCONNECTED"
+                    color: "white"; font.bold: true; font.pixelSize: 12
                 }
             }
 
-            // Servo OFF
+            // Simple telemetry — top left
             Rectangle {
-                width: 90
-                height: 40
-                radius: 6
-                color: servoOffMA.pressed ? "#7a1a1a" : "#8b2222"
-                border.color: "#ff4444"
-                border.width: 1
+                width: 220; height: 140
+                anchors.top: parent.top; anchors.left: parent.left
+                anchors.margins: 10
+                color: "black"; opacity: 0.7; radius: 8
+                border.color: "white"; border.width: 1
+                Column {
+                    anchors.centerIn: parent; spacing: 4
+                    Text { text: "Forward: " + robotController.forwardSpeed.toFixed(2); color: "white"; font.pixelSize: 11 }
+                    Text { text: "Strafe: " + robotController.strafeSpeed.toFixed(2); color: "white"; font.pixelSize: 11 }
+                    Text { text: "Rotation: " + robotController.rotationSpeed.toFixed(2); color: "white"; font.pixelSize: 11 }
+                    Rectangle { width: parent.width; height: 1; color: "#444"; }
+                    Text {
+                        text: robotController.slamController && robotController.slamController.hasData
+                            ? "X: " + robotController.slamController.posX.toFixed(0) + " mm"
+                            : "SLAM: \u2014"
+                        color: "#8cf"; font.pixelSize: 11
+                    }
+                    Text {
+                        text: robotController.slamController && robotController.slamController.hasData
+                            ? "Y: " + robotController.slamController.posY.toFixed(0) + " mm"
+                            : ""
+                        color: "#8cf"; font.pixelSize: 11
+                    }
+                    Text {
+                        text: robotController.slamController && robotController.slamController.hasData
+                            ? "\u03B8: " + robotController.slamController.posTheta.toFixed(1) + "\u00B0"
+                            : ""
+                        color: "#8cf"; font.pixelSize: 11
+                    }
+                }
+            }
 
-                Text {
-                    anchors.centerIn: parent
-                    text: "Servo OFF"
-                    color: "white"
-                    font.pixelSize: 13
-                    font.bold: true
+            // Lidar + Map mini displays — bottom-left
+            Row {
+                anchors.bottom: parent.bottom; anchors.left: parent.left
+                anchors.margins: 10; spacing: 6
+
+                LidarDisplay {
+                    id: lidarDisplay
+                    controller: robotController.lidarController ?? null
                 }
 
-                MouseArea {
-                    id: servoOffMA
-                    anchors.fill: parent
-                    onClicked: robotController.setServoTorque(false)
+                MapDisplay {
+                    id: mapDisplay
+                    controller: robotController.slamController ?? null
+                }
+            }
+
+            // Artificial horizon
+            ArtificialHorizon {
+                id: artificialHorizon
+                anchors.centerIn: parent
+                roll:  robotController.gyroController.latestX
+                pitch: robotController.gyroController.latestY
+            }
+
+            // Help text
+            Rectangle {
+                width: 400; height: 100
+                anchors.bottom: parent.bottom; anchors.horizontalCenter: parent.horizontalCenter
+                anchors.margins: 10
+                color: "black"; opacity: 0.7; radius: 8
+                border.color: "white"; border.width: 1
+                Column {
+                    anchors.centerIn: parent; spacing: 5
+                    Text { text: "Movement Controls:"; color: "white"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                    Text { text: "W/S - Forward/Backward  |  A/D - Strafe Left/Right  |  Q/E - Rotate Left/Right"; color: "white"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                    Text { text: "1/2/3 - Walking Style  |  +/- - Height Up/Down  |  N - NAV mode toggle"; color: "white"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                }
+            }
+
+            // ── Joystick + rotation + height controls (bottom-right) ──
+            Item {
+                id: controlPanel
+                anchors.bottom: parent.bottom; anchors.right: parent.right
+                anchors.margins: 10
+
+                readonly property int jsSize:     180
+                readonly property int slimW:       30
+                readonly property int gap:          4
+                readonly property int knobR:       13
+                readonly property real halfTravel: (jsSize - knobR * 2) / 2
+
+                width:  jsSize + gap + slimW
+                height: jsSize + gap + slimW
+
+                Rectangle {
+                    id: joystickPane
+                    x: 0; y: 0
+                    width:  controlPanel.jsSize; height: controlPanel.jsSize
+                    color: "#1a1a1a"; border.color: "#4a4a4a"; border.width: 1; radius: 6; clip: true
+
+                    Rectangle { anchors.centerIn: parent; width: parent.width; height: 1; color: "#2a2a2a" }
+                    Rectangle { anchors.centerIn: parent; width: 1; height: parent.height; color: "#2a2a2a" }
+
+                    Text { anchors { bottom: parent.bottom; right: parent.right; margins: 4 }
+                        text: "MOVE"; color: "#505050"; font.pixelSize: 9 }
+
+                    Rectangle {
+                        id: jsKnob
+                        width:  controlPanel.knobR * 2; height: controlPanel.knobR * 2; radius: controlPanel.knobR
+                        x: joystickPane.width  / 2 - controlPanel.knobR + (robotController.strafeSpeed  / 2.0) * controlPanel.halfTravel
+                        y: joystickPane.height / 2 - controlPanel.knobR - (robotController.forwardSpeed / 2.0) * controlPanel.halfTravel
+                        color: (Math.abs(robotController.strafeSpeed)  < 0.01 &&
+                                Math.abs(robotController.forwardSpeed) < 0.01) ? "#cc3333" : "#ddbb00"
+                        layer.enabled: true; layer.effect: null
+                    }
+
+                    MouseArea {
+                        id: joystickMA
+                        anchors.fill: parent
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+
+                        onPressed:         function(mouse) { applyJoystick(mouse) }
+                        onPositionChanged: function(mouse) {
+                            if (joystickMA.pressedButtons & Qt.LeftButton) applyJoystick(mouse)
+                        }
+                        function applyJoystick(mouse) {
+                            if (mouse.button === Qt.RightButton) {
+                                robotController.strafeSpeed = 0.0; robotController.forwardSpeed = 0.0; return
+                            }
+                            var cx = joystickPane.width  / 2; var cy = joystickPane.height / 2
+                            var ht = controlPanel.halfTravel
+                            robotController.strafeSpeed  = Math.max(-2.0, Math.min(2.0, (mouse.x - cx) / ht * 2.0))
+                            robotController.forwardSpeed = Math.max(-2.0, Math.min(2.0, (cy - mouse.y) / ht * 2.0))
+                        }
+                    }
+                }
+
+                Rectangle {
+                    id: rotPane
+                    x: 0; y: controlPanel.jsSize + controlPanel.gap
+                    width:  controlPanel.jsSize; height: controlPanel.slimW
+                    color: "#1a1a1a"; border.color: "#4a4a4a"; border.width: 1; radius: height / 2; clip: true
+
+                    Rectangle { anchors.centerIn: parent; width: 1; height: parent.height * 0.6; color: "#2a2a2a" }
+                    Text { anchors { bottom: parent.bottom; right: parent.right; margins: 4 }
+                        text: "ROT"; color: "#505050"; font.pixelSize: 8 }
+
+                    Rectangle {
+                        id: rotKnob
+                        width:  controlPanel.knobR * 2; height: controlPanel.knobR * 2; radius: controlPanel.knobR
+                        x: rotPane.width / 2 - controlPanel.knobR + robotController.rotationSpeed * controlPanel.halfTravel
+                        y: rotPane.height / 2 - controlPanel.knobR
+                        color: Math.abs(robotController.rotationSpeed) < 0.01 ? "#cc3333" : "#ddbb00"
+                    }
+
+                    MouseArea {
+                        id: rotMA; anchors.fill: parent
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        onPressed:         function(mouse) { applyRot(mouse) }
+                        onPositionChanged: function(mouse) {
+                            if (rotMA.pressedButtons & Qt.LeftButton) applyRot(mouse)
+                        }
+                        function applyRot(mouse) {
+                            if (mouse.button === Qt.RightButton) { robotController.rotationSpeed = 0.0; return }
+                            var cx = rotPane.width / 2
+                            robotController.rotationSpeed = Math.max(-1.0, Math.min(1.0, (mouse.x - cx) / controlPanel.halfTravel))
+                        }
+                    }
+                }
+
+                Rectangle {
+                    id: heightPane
+                    x: controlPanel.jsSize + controlPanel.gap; y: 0
+                    width:  controlPanel.slimW; height: controlPanel.jsSize
+                    color: "#1a1a1a"; border.color: "#4a4a4a"; border.width: 1; radius: width / 2; clip: true
+
+                    Rectangle { anchors.centerIn: parent; width: parent.width * 0.6; height: 1; color: "#2a2a2a" }
+                    Text { anchors { bottom: parent.bottom; horizontalCenter: parent.horizontalCenter; bottomMargin: 4 }
+                        text: "H"; color: "#505050"; font.pixelSize: 8 }
+
+                    Rectangle {
+                        id: heightKnob
+                        width:  controlPanel.knobR * 2; height: controlPanel.knobR * 2; radius: controlPanel.knobR
+                        property real normH: Math.max(0.0, Math.min(1.0, (robotController.height - 40.0) / 110.0))
+                        x: heightPane.width  / 2 - controlPanel.knobR
+                        y: heightPane.height / 2 - controlPanel.knobR - (normH - 0.5) * 2.0 * controlPanel.halfTravel
+                        color: Math.abs(robotController.height - 50.0) < 2.0 ? "#cc3333" : "#ddbb00"
+                    }
+
+                    MouseArea {
+                        id: heightMA; anchors.fill: parent
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        onPressed:         function(mouse) { applyHeight(mouse) }
+                        onPositionChanged: function(mouse) {
+                            if (heightMA.pressedButtons & Qt.LeftButton) applyHeight(mouse)
+                        }
+                        function applyHeight(mouse) {
+                            if (mouse.button === Qt.RightButton) { robotController.height = 50.0; return }
+                            var cy = heightPane.height / 2
+                            var nh = Math.max(0.0, Math.min(1.0, 0.5 + (cy - mouse.y) / (controlPanel.halfTravel * 2.0)))
+                            robotController.height = 40.0 + nh * 110.0
+                        }
+                    }
                 }
             }
         }
 
-        // Sensor data block — top right
-        SensorDataDisplay {
-            id: sensorDataDisplay
-            width: 220
-            height: 205
-            anchors.top: parent.top
-            anchors.right: parent.right
-            anchors.margins: 10
-            visible: robotController.connected
-            telemetryData: robotController.telemetryData
-        }
+        // ── In-nav-mode overlay (map inlined, no separate MapDisplay) ──
+        Item {
+            anchors.fill: parent
+            visible: navMode
+            clip: true
 
-        // Connection status
-        Rectangle {
-            width: 150
-            height: 30
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.right: parent.right
-            anchors.margins: 10
-            color: robotController.connected ? "green" : "red"
-            opacity: 0.8
-            radius: 5
-            
+            // Inlined map image
+            Image {
+                id: navMapImage
+                anchors.fill: parent
+                fillMode: Image.PreserveAspectFit
+                cache: false
+                source: robotController.slamController
+                    ? "image://map/frame?idx=" + robotController.slamController.mapFrameIndex
+                    : ""
+
+                transform: [
+                    Translate { x: navPanX; y: navPanY },
+                    Scale {
+                        origin.x: navMapImage.width  / 2
+                        origin.y: navMapImage.height / 2
+                        xScale: navZoom; yScale: navZoom
+                    }
+                ]
+            }
+
+            // Fallback text when no SLAM data
             Text {
                 anchors.centerIn: parent
-                text: robotController.connected ? "CONNECTED" : "DISCONNECTED"
-                color: "white"
-                font.bold: true
-                font.pixelSize: 12
+                color: "#555"
+                font.pixelSize: 14
+                text: "SLAM: no data"
+                visible: !(robotController.slamController && robotController.slamController.hasData)
+                z: 2
             }
-        }
-        
-        // Simple telemetry display
-        Rectangle {
-            width: 200
-            height: 100
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.margins: 10
-            color: "black"
-            opacity: 0.7
-            radius: 8
-            border.color: "white"
-            border.width: 1
-            
-            Column {
-                anchors.centerIn: parent
-                spacing: 5
-                
-                Text {
-                    text: "Forward: " + robotController.forwardSpeed.toFixed(2)
-                    color: "white"
-                    font.pixelSize: 12
-                }
-                
-                Text {
-                    text: "Strafe: " + robotController.strafeSpeed.toFixed(2)
-                    color: "white"
-                    font.pixelSize: 12
-                }
-                
-                Text {
-                    text: "Rotation: " + robotController.rotationSpeed.toFixed(2)
-                    color: "white"
-                    font.pixelSize: 12
-                }
-            }
-        }
-        
-        // SLAM pose display
-        Rectangle {
-            width: 200
-            height: 80
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.topMargin: 115
-            anchors.leftMargin: 10
-            color: "black"
-            opacity: 0.7
-            radius: 8
-            border.color: "white"
-            border.width: 1
-            visible: robotController.slamStreamActive
-            
-            Column {
-                anchors.centerIn: parent
-                spacing: 4
-                
-                Text {
-                    text: "SLAM Position"
-                    color: "#88ff88"
-                    font.pixelSize: 11
-                    font.bold: true
-                    anchors.horizontalCenter: parent.horizontalCenter
-                }
-                
-                Text {
-                    text: "X: " + robotController.slamController.posX.toFixed(0) + " mm"
-                    color: "white"
-                    font.pixelSize: 11
-                }
-                
-                Text {
-                    text: "Y: " + robotController.slamController.posY.toFixed(0) + " mm"
-                    color: "white"
-                    font.pixelSize: 11
-                }
-                
-                Text {
-                    text: "θ: " + robotController.slamController.posTheta.toFixed(1) + "°"
-                    color: "white"
-                    font.pixelSize: 11
-                }
-            }
-        }
-        
-        // Lidar display
-        LidarDisplay {
-            id: lidarDisplay
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            anchors.margins: 10
-            controller: robotController.lidarController ?? null
-        }
-        
-        // Artificial horizon — centered over the video feed
-        ArtificialHorizon {
-            id: artificialHorizon
-            anchors.centerIn: parent
-            visible: robotController.connected
-            roll:  robotController.gyroController.latestX
-            pitch: robotController.gyroController.latestY
-        }
-        
-        // Help message with hotkeys
-        Rectangle {
-            width: 400
-            height: 100
-            anchors.bottom: parent.bottom
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.margins: 10
-            color: "black"
-            opacity: 0.7
-            radius: 8
-            border.color: "white"
-            border.width: 1
-            
-            Column {
-                anchors.centerIn: parent
-                spacing: 5
-                
-                Text {
-                    text: "Movement Controls:"
-                    color: "white"
-                    font.pixelSize: 12
-                    font.bold: true
-                    anchors.horizontalCenter: parent.horizontalCenter
-                }
-                
-                Text {
-                    text: "W/S - Forward/Backward  |  A/D - Strafe Left/Right  |  Q/E - Rotate Left/Right"
-                    color: "white"
-                    font.pixelSize: 10
-                    anchors.horizontalCenter: parent.horizontalCenter
-                }
-                
-                Text {
-                    text: "1/2/3 - Walking Style  |  +/- - Height Up/Down"
-                    color: "white"
-                    font.pixelSize: 10
-                    anchors.horizontalCenter: parent.horizontalCenter
-                }
-            }
-        }
-        
-        // ── Joystick + rotation + height controls (bottom-right) ────────────
-        Item {
-            id: controlPanel
-            anchors.bottom: parent.bottom
-            anchors.right: parent.right
-            anchors.margins: 10
 
-            // Layout constants
-            readonly property int jsSize:     180   // joystick square side / slider length
-            readonly property int slimW:       30   // thin-slider thickness
-            readonly property int gap:          4   // gap between panels
-            readonly property int knobR:       13   // knob radius
-            readonly property real halfTravel: (jsSize - knobR * 2) / 2  // px from center to edge
+            // Inlined robot arrow
+            Image {
+                id: navRobotArrow
+                visible: robotController.slamController && robotController.slamController.hasData
+                source: "arrow.svg"
+                sourceSize.width: 32
+                sourceSize.height: 40
+                smooth: true
 
-            width:  jsSize + gap + slimW
-            height: jsSize + gap + slimW
+                property var sc: {
+                    if (!robotController.slamController || !robotController.slamController.hasData) return null
+                    var c = robotController.slamController
+                    var pw = navMapImage.paintedWidth, ph = navMapImage.paintedHeight
+                    var px = navMapImage.paintedX, py = navMapImage.paintedY
+                    var ms = c.mapSizeMeters
+                    if (pw <= 0 || ph <= 0 || ms <= 0) return null
+                    var iw = navMapImage.width, ih = navMapImage.height
+                    var lx = px + (c.posX / 1000.0) * pw / ms
+                    var ly = py + (c.posY / 1000.0) * ph / ms
+                    var sx = (lx - iw / 2) * navZoom + iw / 2 + navPanX
+                    var sy = (ly - ih / 2) * navZoom + ih / 2 + navPanY
+                    return [sx, sy]
+                }
 
-            // ── 1. XY Joystick (strafe / forward) ────────────────────────
+                x: sc ? sc[0] - width  / 2 : -100
+                y: sc ? sc[1] - height / 2 : -100
+
+                transform: Rotation {
+                    origin.x: navRobotArrow.width  / 2
+                    origin.y: navRobotArrow.height / 2
+                    angle: 90 + (robotController.slamController ? robotController.slamController.posTheta : 0)
+                }
+            }
+
+            // NAV bar at top (overlays map)
             Rectangle {
-                id: joystickPane
-                x: 0; y: 0
-                width:  controlPanel.jsSize
-                height: controlPanel.jsSize
+                anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+                height: 40
                 color: "#1a1a1a"
-                border.color: "#4a4a4a"
-                border.width: 1
-                radius: 6
-                clip: true
+                opacity: 0.8
+                z: 5
 
-                // Cross-hair guides
-                Rectangle { anchors.centerIn: parent; width: parent.width; height: 1; color: "#2a2a2a" }
-                Rectangle { anchors.centerIn: parent; width: 1; height: parent.height; color: "#2a2a2a" }
+                Row {
+                    anchors.left: parent.left; anchors.leftMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 10
 
-                // Corner label
-                Text {
-                    anchors { bottom: parent.bottom; right: parent.right; margins: 4 }
-                    text: "MOVE"
-                    color: "#505050"
-                    font.pixelSize: 9
-                }
-
-                // Knob — position is a pure binding on the controller properties
-                Rectangle {
-                    id: jsKnob
-                    width:  controlPanel.knobR * 2
-                    height: controlPanel.knobR * 2
-                    radius: controlPanel.knobR
-                    // center offset = normalised value * halfTravel
-                    x: joystickPane.width  / 2 - controlPanel.knobR
-                       + (robotController.strafeSpeed  / 2.0) * controlPanel.halfTravel
-                    y: joystickPane.height / 2 - controlPanel.knobR
-                       - (robotController.forwardSpeed / 2.0) * controlPanel.halfTravel
-                    color: (Math.abs(robotController.strafeSpeed)  < 0.01 &&
-                            Math.abs(robotController.forwardSpeed) < 0.01) ? "#cc3333" : "#ddbb00"
-                    layer.enabled: true
-                    layer.effect: null
-                }
-
-                MouseArea {
-                    id: joystickMA
-                    anchors.fill: parent
-                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-
-                    onPressed:         function(mouse) { applyJoystick(mouse) }
-                    onPositionChanged: function(mouse) {
-                        if (joystickMA.pressedButtons & Qt.LeftButton)
-                            applyJoystick(mouse)
-                    }
-
-                    function applyJoystick(mouse) {
-                        if (mouse.button === Qt.RightButton) {
-                            robotController.strafeSpeed  = 0.0
-                            robotController.forwardSpeed = 0.0
-                            return
+                    Rectangle {
+                        width: 70; height: 30; radius: 4
+                        color: "#662222"; border.color: "#ff4444"; border.width: 1
+                        Text { anchors.centerIn: parent; text: "BACK"; color: "white"; font.bold: true; font.pixelSize: 11 }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: mainWindow.setNavMode(false)
                         }
-                        var cx = joystickPane.width  / 2
-                        var cy = joystickPane.height / 2
-                        var ht = controlPanel.halfTravel
-                        robotController.strafeSpeed  = Math.max(-2.0, Math.min(2.0,
-                            (mouse.x - cx) / ht * 2.0))
-                        robotController.forwardSpeed = Math.max(-2.0, Math.min(2.0,
-                            (cy - mouse.y) / ht * 2.0))
                     }
-                }
-            }
 
-            // ── 2. Rotation slider (horizontal, below joystick) ───────────
-            Rectangle {
-                id: rotPane
-                x: 0
-                y: controlPanel.jsSize + controlPanel.gap
-                width:  controlPanel.jsSize
-                height: controlPanel.slimW
-                color: "#1a1a1a"
-                border.color: "#4a4a4a"
-                border.width: 1
-                radius: height / 2
-                clip: true
-
-                Rectangle { anchors.centerIn: parent; width: 1; height: parent.height * 0.6; color: "#2a2a2a" }
-
-                Text {
-                    anchors { bottom: parent.bottom; right: parent.right; margins: 4 }
-                    text: "ROT"
-                    color: "#505050"
-                    font.pixelSize: 8
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "NAVIGATION MODE"
+                        color: "#ffcc00"; font.bold: true; font.pixelSize: 14
+                    }
                 }
 
                 Rectangle {
-                    id: rotKnob
-                    width:  controlPanel.knobR * 2
-                    height: controlPanel.knobR * 2
-                    radius: controlPanel.knobR
-                    x: rotPane.width / 2 - controlPanel.knobR
-                       + robotController.rotationSpeed * controlPanel.halfTravel
-                    y: rotPane.height / 2 - controlPanel.knobR
-                    color: Math.abs(robotController.rotationSpeed) < 0.01 ? "#cc3333" : "#ddbb00"
-                }
-
-                MouseArea {
-                    id: rotMA
-                    anchors.fill: parent
-                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-
-                    onPressed:         function(mouse) { applyRot(mouse) }
-                    onPositionChanged: function(mouse) {
-                        if (rotMA.pressedButtons & Qt.LeftButton)
-                            applyRot(mouse)
-                    }
-
-                    function applyRot(mouse) {
-                        if (mouse.button === Qt.RightButton) {
-                            robotController.rotationSpeed = 0.0
-                            return
-                        }
-                        var cx = rotPane.width / 2
-                        robotController.rotationSpeed = Math.max(-1.0, Math.min(1.0,
-                            (mouse.x - cx) / controlPanel.halfTravel))
+                    anchors.right: parent.right; anchors.rightMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 80; height: 30; radius: 4
+                    color: "#334466"; border.color: "#5588cc"; border.width: 1
+                    Text { anchors.centerIn: parent; text: "Reset View"; color: "white"; font.pixelSize: 11 }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: { navPanX = 0; navPanY = 0; navZoom = 1.0 }
                     }
                 }
             }
 
-            // ── 3. Height slider (vertical, right of joystick) ────────────
+            // Mouse area for pan, zoom, navigate (on top of map, below bars)
+            MouseArea {
+                id: navMapMouseArea
+                anchors.fill: parent
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                hoverEnabled: true
+                cursorShape: navDragging ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                z: 3
+
+                property real dragStartX: 0; property real dragStartY: 0
+                property real dragPanX: 0; property real dragPanY: 0
+                property bool navDragging: false
+
+                onPressed: function(mouse) {
+                    if (mouse.button === Qt.RightButton && robotController.slamController && robotController.slamController.hasData) {
+                        var iw = navMapImage.width, ih = navMapImage.height
+                        var pw = navMapImage.paintedWidth, ph = navMapImage.paintedHeight
+                        var px = navMapImage.paintedX, py = navMapImage.paintedY
+                        if (pw <= 0 || ph <= 0) return
+                        var ms = robotController.slamController.mapSizeMeters
+                        var lx = (mouse.x - navPanX - iw / 2) / navZoom + iw / 2
+                        var ly = (mouse.y - navPanY - ih / 2) / navZoom + ih / 2
+                        var wx = (lx - px) * ms / pw * 1000.0
+                        var wy = (ly - py) * ms / ph * 1000.0
+                        robotController.sendMoveToPoint(wx, wy)
+                        return
+                    }
+                    dragStartX = mouse.x; dragStartY = mouse.y
+                    dragPanX = navPanX; dragPanY = navPanY
+                    navDragging = true
+                }
+
+                onPositionChanged: function(mouse) {
+                    if (navDragging && (pressedButtons & Qt.LeftButton)) {
+                        navPanX = dragPanX + (mouse.x - dragStartX)
+                        navPanY = dragPanY + (mouse.y - dragStartY)
+                    }
+                }
+
+                onReleased: { navDragging = false }
+
+                onWheel: function(wheel) {
+                    var oldZoom = navZoom
+                    var f = wheel.angleDelta.y > 0 ? 1.1 : 1.0 / 1.1
+                    var newZoom = Math.max(0.3, Math.min(10.0, oldZoom * f))
+                    var mx = wheel.x / navMapMouseArea.width
+                    var my = wheel.y / navMapMouseArea.height
+                    var wx = (mx - 0.5) * navMapMouseArea.width / oldZoom - navPanX / oldZoom
+                    var wy = (my - 0.5) * navMapMouseArea.height / oldZoom - navPanY / oldZoom
+                    navZoom = newZoom
+                    navPanX = -(wx * newZoom - (mx - 0.5) * navMapMouseArea.width)
+                    navPanY = -(wy * newZoom - (my - 0.5) * navMapMouseArea.height)
+                }
+            }
+
+            // HUD: robot coordinate + state at bottom
             Rectangle {
-                id: heightPane
-                x: controlPanel.jsSize + controlPanel.gap
-                y: 0
-                width:  controlPanel.slimW
-                height: controlPanel.jsSize
-                color: "#1a1a1a"
-                border.color: "#4a4a4a"
-                border.width: 1
-                radius: width / 2
-                clip: true
+                anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right
+                height: 36
+                color: "#1a1a1a"; opacity: 0.8
+                z: 5
 
-                Rectangle { anchors.centerIn: parent; width: parent.width * 0.6; height: 1; color: "#2a2a2a" }
-
-                Text {
-                    anchors { bottom: parent.bottom; horizontalCenter: parent.horizontalCenter; bottomMargin: 4 }
-                    text: "H"
-                    color: "#505050"
-                    font.pixelSize: 8
-                }
-
-                // normH: 0 = 40 mm (bottom), 1 = 150 mm (top), ~0.09 = 50 mm default
-                // knob moves up as height increases (normH → 1 = top of slider)
-                Rectangle {
-                    id: heightKnob
-                    width:  controlPanel.knobR * 2
-                    height: controlPanel.knobR * 2
-                    radius: controlPanel.knobR
-                    property real normH: Math.max(0.0, Math.min(1.0,
-                        (robotController.height - 40.0) / 110.0))
-                    x: heightPane.width  / 2 - controlPanel.knobR
-                    y: heightPane.height / 2 - controlPanel.knobR
-                       - (normH - 0.5) * 2.0 * controlPanel.halfTravel
-                    color: Math.abs(robotController.height - 50.0) < 2.0 ? "#cc3333" : "#ddbb00"
-                }
-
-                MouseArea {
-                    id: heightMA
-                    anchors.fill: parent
-                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-
-                    onPressed:         function(mouse) { applyHeight(mouse) }
-                    onPositionChanged: function(mouse) {
-                        if (heightMA.pressedButtons & Qt.LeftButton)
-                            applyHeight(mouse)
-                    }
-
-                    function applyHeight(mouse) {
-                        if (mouse.button === Qt.RightButton) {
-                            robotController.height = 50.0   // robot default
-                            return
-                        }
-                        var cy = heightPane.height / 2
-                        var nh = Math.max(0.0, Math.min(1.0,
-                            0.5 + (cy - mouse.y) / (controlPanel.halfTravel * 2.0)))
-                        robotController.height = 40.0 + nh * 110.0  // → 40..150 mm
-                    }
+                Row {
+                    anchors.centerIn: parent; spacing: 30
+                    Text { color: "#aaa"; font.pixelSize: 11
+                        text: "X: " + (robotController.slamController ? robotController.slamController.posX.toFixed(0) : "—") + " mm" }
+                    Text { color: "#aaa"; font.pixelSize: 11
+                        text: "Y: " + (robotController.slamController ? robotController.slamController.posY.toFixed(0) : "—") + " mm" }
+                    Text { color: "#aaa"; font.pixelSize: 11
+                        text: "\u03B8: " + (robotController.slamController ? robotController.slamController.posTheta.toFixed(1) : "—") + "\u00B0" }
+                    Text { color: "#aaa"; font.pixelSize: 11
+                        text: "Zoom: \u00D7" + navZoom.toFixed(1) }
                 }
             }
         }
-        // Keyboard event handling
+
+        // ── Keyboard — global (works in both modes) ──
         Keys.onPressed: function(event) {
             switch(event.key) {
-                case Qt.Key_W:
-                    robotController.forwardSpeed = 1.0
+                case Qt.Key_N:
+                    mainWindow.setNavMode(!navMode)
                     break
-                case Qt.Key_S:
-                    robotController.forwardSpeed = -1.0
+                case Qt.Key_W: case Qt.Key_S:
+                case Qt.Key_A: case Qt.Key_D:
+                case Qt.Key_Q: case Qt.Key_E:
+                case Qt.Key_1: case Qt.Key_2: case Qt.Key_3:
+                case Qt.Key_Plus: case Qt.Key_Equal: case Qt.Key_Minus:
+                    if (navMode) break
+                    // fall through
+                default:
                     break
-                case Qt.Key_A:
-                    robotController.strafeSpeed = -1.0
-                    break
-                case Qt.Key_D:
-                    robotController.strafeSpeed = 1.0
-                    break
-                case Qt.Key_Q:
-                    robotController.rotationSpeed = -1.0
-                    break
-                case Qt.Key_E:
-                    robotController.rotationSpeed = 1.0
-                    break
-                case Qt.Key_1:
-                    robotController.walkingStyle = 1
-                    break
-                case Qt.Key_2:
-                    robotController.walkingStyle = 2
-                    break
-                case Qt.Key_3:
-                    robotController.walkingStyle = 3
-                    break
+            }
+            if (navMode) return
+            switch(event.key) {
+                case Qt.Key_W: robotController.forwardSpeed = 1.0; break
+                case Qt.Key_S: robotController.forwardSpeed = -1.0; break
+                case Qt.Key_A: robotController.strafeSpeed = -1.0; break
+                case Qt.Key_D: robotController.strafeSpeed = 1.0; break
+                case Qt.Key_Q: robotController.rotationSpeed = -1.0; break
+                case Qt.Key_E: robotController.rotationSpeed = 1.0; break
+                case Qt.Key_1: robotController.walkingStyle = 1; break
+                case Qt.Key_2: robotController.walkingStyle = 2; break
+                case Qt.Key_3: robotController.walkingStyle = 3; break
                 case Qt.Key_Plus:
-                case Qt.Key_Equal:
-                    robotController.height = Math.min(robotController.height + 5.0, 150.0)
-                    break
-                case Qt.Key_Minus:
-                    robotController.height = Math.max(robotController.height - 5.0, 40.0)
-                    break
+                case Qt.Key_Equal: robotController.height = Math.min(robotController.height + 5.0, 150.0); break
+                case Qt.Key_Minus: robotController.height = Math.max(robotController.height - 5.0, 40.0); break
             }
         }
         
         Keys.onReleased: function(event) {
+            if (navMode) return
             switch(event.key) {
-                case Qt.Key_W:
-                case Qt.Key_S:
-                    robotController.forwardSpeed = 0.0
-                    break
-                case Qt.Key_A:
-                case Qt.Key_D:
-                    robotController.strafeSpeed = 0.0
-                    break
-                case Qt.Key_Q:
-                case Qt.Key_E:
-                    robotController.rotationSpeed = 0.0
-                    break
+                case Qt.Key_W: case Qt.Key_S: robotController.forwardSpeed = 0.0; break
+                case Qt.Key_A: case Qt.Key_D: robotController.strafeSpeed = 0.0; break
+                case Qt.Key_Q: case Qt.Key_E: robotController.rotationSpeed = 0.0; break
             }
         }
     }

@@ -9,6 +9,7 @@
 #include "LidarDataModel.h"
 #include "GyroDataModel.h"
 #include "SlamController.h"
+#include "MapProvider.h"
 #include "VideoProvider.h"
 
 RobotController::RobotController(QObject *parent)
@@ -119,6 +120,13 @@ void RobotController::setVideoProvider(VideoProvider *provider)
     m_videoProvider = provider;
 }
 
+void RobotController::setMapProvider(MapProvider *provider)
+{
+    m_mapProvider = provider;
+    if (m_slamController)
+        m_slamController->setMapProvider(provider);
+}
+
 void RobotController::connectToRobot()
 {
     if (m_serverIp.isEmpty()) {
@@ -175,6 +183,22 @@ void RobotController::setServoTorque(bool enabled)
     cmd.set_enabled(enabled);
     sendMessage(Spider2::MessageType::SERVO_TORQUE_COMMAND, cmd);
     qInfo() << "[ROBOT] Servo torque" << (enabled ? "ON" : "OFF") << "sent";
+}
+
+void RobotController::sendMoveToPoint(float target_x_mm, float target_y_mm, float tolerance_mm)
+{
+    if (!m_connected) return;
+    auto cmd = Spider2::MessageFactory::createMoveToPointCommand(target_x_mm, target_y_mm, tolerance_mm);
+    sendMessage(Spider2::MessageType::MOVE_TO_POINT_COMMAND, cmd);
+    qInfo() << "[ROBOT] MoveToPoint sent: (" << target_x_mm << "," << target_y_mm << ")";
+}
+
+void RobotController::sendStateChange(const QString &state)
+{
+    if (!m_connected) return;
+    auto cmd = Spider2::MessageFactory::createRobotStateChange(state.toStdString());
+    sendMessage(Spider2::MessageType::ROBOT_STATE_CHANGE, cmd);
+    qInfo() << "[ROBOT] State change sent:" << state;
 }
 
 void RobotController::sendHeartbeat()
@@ -407,6 +431,28 @@ void RobotController::dispatchMessage(uint8_t messageType, const std::string &ra
                 const double theta = slamPose.theta_deg();
                 QMetaObject::invokeMethod(this, [this, x, y, theta]() {
                     m_slamController->updatePose(x, y, theta);
+                    markSlamReceived();
+                }, Qt::QueuedConnection);
+            }
+            break;
+        }
+        case Spider2::MessageType::MOVE_TO_POINT_COMMAND: {
+            // Acknowledge — handled server-side, no local processing needed
+            break;
+        }
+        case Spider2::MessageType::ROBOT_STATE_CHANGE: {
+            // Robot will confirm state change via TELEMETRY_UPDATE robot_state
+            break;
+        }
+        case Spider2::MessageType::SLAM_MAP: {
+            Command::SlamMap slamMap;
+            if (slamMap.ParseFromString(protobufData)) {
+                const int szPx = slamMap.size_pixels();
+                const double szM = slamMap.size_meters();
+                const std::string &raw = slamMap.data();
+                QByteArray data(raw.data(), static_cast<int>(raw.size()));
+                QMetaObject::invokeMethod(this, [this, szPx, szM, data]() {
+                    m_slamController->updateMap(szPx, szM, data);
                     markSlamReceived();
                 }, Qt::QueuedConnection);
             }

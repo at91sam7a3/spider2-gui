@@ -143,6 +143,11 @@ enum MessageType : uint8_t {
     VIDEO_FRAME        = 0x05,  // Server → Client: Camera frame (JPEG encoded)
     HEIGHT_COMMAND     = 0x06,  // Client → Server: Body height adjustment
     WALKING_STYLE_CMD  = 0x07,  // Client → Server: Walking gait selection
+    SERVO_TORQUE_CMD   = 0x08,  // Client → Server: Servo torque on/off
+    SLAM_POSE          = 0x09,  // Server → Client: SLAM position estimate
+    SLAM_MAP           = 0x0A,  // Server → Client: SLAM occupancy grid map
+    MOVE_TO_POINT_CMD  = 0x0B,  // Client → Server: Autonomous navigation target
+    ROBOT_STATE_CHANGE = 0x0C,  // Client → Server: Request state transition
 };
 ```
 
@@ -154,6 +159,11 @@ enum MessageType : uint8_t {
 | MOVE_COMMAND | → Server | On-demand | None (async) | - |
 | HEIGHT_COMMAND | → Server | On-demand | None (async) | - |
 | WALKING_STYLE_CMD | → Server | On-demand | None (async) | - |
+| SERVO_TORQUE_CMD | → Server | On-demand | None (async) | - |
+| MOVE_TO_POINT_CMD | → Server | On-demand | None (async) | - |
+| ROBOT_STATE_CHANGE | → Server | On-demand | None (async) | - |
+| SLAM_POSE | → Client | ~8Hz | None | - |
+| SLAM_MAP | → Client | Variable | None | - |
 | TELEMETRY_UPDATE | → Client | ~1Hz | None | - |
 | GYRO_DATA | → Client | ~10Hz | None | - |
 | LIDAR_DATA | → Client | ~10Hz | None | - |
@@ -298,6 +308,78 @@ message TelemetryUpdate{
   - `cpu_temperature` (float): e.g., 45.2°C — Raspberry Pi CPU temp
   - `status` (string): e.g., "running", "error", "idle" — Robot operational status
   - Any custom metric as name/value pair
+
+#### 9. ServoTorqueCommand
+
+```protobuf
+message ServoTorqueCommand{
+    required bool enabled = 1;  // true = load (torque on), false = unload (torque off)
+}
+```
+
+**Usage:**
+- Broadcast to all 18 servos using id=254
+- Disables/enables servo holding torque
+
+#### 10. SlamPose
+
+```protobuf
+message SlamPose{
+    required int64 timestamp = 1;
+    required double x_mm = 2;         // X position in millimeters
+    required double y_mm = 3;         // Y position in millimeters
+    required double theta_deg = 4;    // Orientation in degrees
+}
+```
+
+**Usage:**
+- Sent by SLAM engine after each LIDAR scan update (~8Hz)
+- Used for navigation and map alignment
+
+#### 11. SlamMap
+
+```protobuf
+message SlamMap{
+    required int64 timestamp = 1;
+    required int32 size_pixels = 2;   // Map size (square)
+    required double size_meters = 3;  // Physical size in meters
+    required bytes data = 4;          // Map pixel data (size_pixels^2 bytes)
+}
+```
+
+**Usage:**
+- Occupancy grid map built by SLAM
+- 0 = free space, 255 = obstacle
+
+#### 12. MoveToPointCommand
+
+```protobuf
+message MoveToPointCommand{
+    required float target_x_mm = 1;
+    required float target_y_mm = 2;
+    optional float tolerance_mm = 3 [default = 50.0];
+}
+```
+
+**Usage:**
+- Sets a target waypoint for autonomous navigation
+- Robot transitions to MoveToPoint state on receipt
+- Uses SLAM pose to navigate to (target_x_mm, target_y_mm)
+- Tolerance defaults to 50mm radius around target
+- When reached, robot auto-transitions back to ManualControl
+
+#### 13. RobotStateChange
+
+```protobuf
+message RobotStateChange{
+    required string state = 1;  // "manual_control" or "move_to_point"
+}
+```
+
+**Usage:**
+- Request explicit state transition on the robot
+- Valid values: `"manual_control"`, `"move_to_point"`
+- Robot confirms via TELEMETRY_UPDATE with name="robot_state"
 
 **Distinction from Sensor Data:**
 - **GYRO_DATA** = Motion sensor (angular velocity)
@@ -537,6 +619,11 @@ public:
 0x05 = VIDEO_FRAME       (server→client, camera)
 0x06 = HEIGHT_COMMAND    (client→server, body height)
 0x07 = WALKING_STYLE_CMD (client→server, gait)
+0x08 = SERVO_TORQUE_CMD  (client→server, torque)
+0x09 = SLAM_POSE         (server→client, position)
+0x0A = SLAM_MAP          (server→client, map)
+0x0B = MOVE_TO_POINT_CMD (client→server, navigate)
+0x0C = ROBOT_STATE_CHANGE(client→server, state)
 ```
 
 ---
@@ -568,3 +655,4 @@ public:
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | May 2026 | Initial protocol documentation |
+| 1.1 | May 2026 | Added SLAM messages (SlamPose, SlamMap), ServoTorqueCommand, MoveToPointCommand, RobotStateChange |

@@ -25,7 +25,9 @@ enum class MessageType : uint8_t {
     WALKING_STYLE_COMMAND = 0x07, ///< Robot walking style/gait command
     SERVO_TORQUE_COMMAND = 0x08, ///< Enable/disable servo torque (broadcast)
     SLAM_POSE = 0x09,           ///< SLAM position estimate
-    SLAM_MAP = 0x0A             ///< SLAM map data
+    SLAM_MAP = 0x0A,            ///< SLAM map data
+    MOVE_TO_POINT_COMMAND = 0x0B, ///< Autonomous navigation to target point
+    ROBOT_STATE_CHANGE = 0x0C   ///< Request robot state transition
 };
 
 /**
@@ -72,6 +74,10 @@ namespace MessageConstants {
     constexpr size_t MAX_TELEMETRY_NAME_LENGTH = 64;
     constexpr size_t MAX_CLIENT_ID_LENGTH = 32;
     constexpr size_t MAX_LIDAR_READINGS = 32;
+
+    // State names
+    constexpr const char* STATE_MANUAL_CONTROL = "manual_control";
+    constexpr const char* STATE_MOVE_TO_POINT  = "move_to_point";
 }
 
 /**
@@ -238,6 +244,22 @@ namespace MessageFactory {
         return pose;
     }
 
+    inline Command::MoveToPointCommand createMoveToPointCommand(float target_x_mm,
+                                                                 float target_y_mm,
+                                                                 float tolerance_mm = 50.0f) {
+        Command::MoveToPointCommand cmd;
+        cmd.set_target_x_mm(target_x_mm);
+        cmd.set_target_y_mm(target_y_mm);
+        cmd.set_tolerance_mm(tolerance_mm);
+        return cmd;
+    }
+
+    inline Command::RobotStateChange createRobotStateChange(const std::string& state) {
+        Command::RobotStateChange cmd;
+        cmd.set_state(state);
+        return cmd;
+    }
+
     inline Command::SlamMap createSlamMap(int size_pixels, double size_meters,
                                           const std::vector<char>& data,
                                           int64_t timestamp = 0) {
@@ -389,6 +411,10 @@ namespace MessageUtils {
                 return MessageConstants::GYRO_DATA_NAME;
             case MessageType::HEARTBEAT:
                 return MessageConstants::HEARTBEAT_NAME;
+            case MessageType::MOVE_TO_POINT_COMMAND:
+                return "MoveToPointCommand";
+            case MessageType::ROBOT_STATE_CHANGE:
+                return "RobotStateChange";
             default:
                 return "Unknown";
         }

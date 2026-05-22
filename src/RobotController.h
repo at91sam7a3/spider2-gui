@@ -18,6 +18,7 @@
 #include "SlamController.h"
 
 class VideoProvider;
+class MapProvider;
 
 class RobotController : public QObject
 {
@@ -71,10 +72,15 @@ public slots:
     void setHeight(float height);
     void setWalkingStyle(int style);
     void setVideoProvider(VideoProvider *provider);
+    void setMapProvider(MapProvider *provider);
     void connectToRobot();
     void disconnectFromRobot();
     /// @brief Broadcast servo torque on/off to all servos (id=254)
     Q_INVOKABLE void setServoTorque(bool enabled);
+    /// @brief Send move-to-point command for autonomous navigation
+    Q_INVOKABLE void sendMoveToPoint(float target_x_mm, float target_y_mm, float tolerance_mm = 50.0f);
+    /// @brief Request robot state transition
+    Q_INVOKABLE void sendStateChange(const QString &state);
 
 signals:
     void serverIpChanged();
@@ -142,6 +148,9 @@ private:
 
     // Video provider
     VideoProvider *m_videoProvider{nullptr};
+
+    // Map provider
+    MapProvider *m_mapProvider{nullptr};
 
     // Heartbeat timer
     QTimer *m_heartbeatTimer;
