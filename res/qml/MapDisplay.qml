@@ -172,7 +172,7 @@ Rectangle {
             transform: Rotation {
                 origin.x: robotArrow.width  / 2
                 origin.y: robotArrow.height / 2
-                angle: (controller ? 90 + controller.posTheta : 0)
+                angle: (controller ? controller.posTheta : 0)
             }
         }
     }

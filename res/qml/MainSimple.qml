@@ -638,7 +638,7 @@ Window {
                     transform: Rotation {
                         origin.x: navRobotArrow.width  / 2
                         origin.y: navRobotArrow.height / 2
-                        angle: 90 + (robotController.slamController ? robotController.slamController.posTheta : 0)
+                        angle: (robotController.slamController ? robotController.slamController.posTheta : 0)
                     }
                 }
             }
