@@ -447,8 +447,8 @@ Window {
                     Rectangle {
                         id: jsKnob
                         width:  controlPanel.knobR * 2; height: controlPanel.knobR * 2; radius: controlPanel.knobR
-                        x: joystickPane.width  / 2 - controlPanel.knobR + (robotController.strafeSpeed  / 2.0) * controlPanel.halfTravel
-                        y: joystickPane.height / 2 - controlPanel.knobR - (robotController.forwardSpeed / 2.0) * controlPanel.halfTravel
+                        x: joystickPane.width  / 2 - controlPanel.knobR + (robotController.strafeSpeed  / 10.0) * controlPanel.halfTravel
+                        y: joystickPane.height / 2 - controlPanel.knobR - (robotController.forwardSpeed / 10.0) * controlPanel.halfTravel
                         color: (Math.abs(robotController.strafeSpeed)  < 0.01 &&
                                 Math.abs(robotController.forwardSpeed) < 0.01) ? "#cc3333" : "#ddbb00"
                         layer.enabled: true; layer.effect: null
@@ -469,8 +469,8 @@ Window {
                             }
                             var cx = joystickPane.width  / 2; var cy = joystickPane.height / 2
                             var ht = controlPanel.halfTravel
-                            robotController.strafeSpeed  = Math.max(-2.0, Math.min(2.0, (mouse.x - cx) / ht * 2.0))
-                            robotController.forwardSpeed = Math.max(-2.0, Math.min(2.0, (cy - mouse.y) / ht * 2.0))
+                            robotController.strafeSpeed  = Math.max(-10.0, Math.min(10.0, (mouse.x - cx) / ht * 10.0))
+                            robotController.forwardSpeed = Math.max(-10.0, Math.min(10.0, (cy - mouse.y) / ht * 10.0))
                         }
                     }
                 }
@@ -488,7 +488,7 @@ Window {
                     Rectangle {
                         id: rotKnob
                         width:  controlPanel.knobR * 2; height: controlPanel.knobR * 2; radius: controlPanel.knobR
-                        x: rotPane.width / 2 - controlPanel.knobR + robotController.rotationSpeed * controlPanel.halfTravel
+                        x: rotPane.width / 2 - controlPanel.knobR - (robotController.rotationSpeed / 4.0) * controlPanel.halfTravel
                         y: rotPane.height / 2 - controlPanel.knobR
                         color: Math.abs(robotController.rotationSpeed) < 0.01 ? "#cc3333" : "#ddbb00"
                     }
@@ -503,7 +503,7 @@ Window {
                         function applyRot(mouse) {
                             if (mouse.button === Qt.RightButton) { robotController.rotationSpeed = 0.0; return }
                             var cx = rotPane.width / 2
-                            robotController.rotationSpeed = Math.max(-1.0, Math.min(1.0, (mouse.x - cx) / controlPanel.halfTravel))
+                            robotController.rotationSpeed = Math.max(-4.0, Math.min(4.0, -(mouse.x - cx) / controlPanel.halfTravel * 4.0))
                         }
                     }
                 }
@@ -752,12 +752,12 @@ Window {
             }
             if (navMode) return
             switch(event.key) {
-                case Qt.Key_W: robotController.forwardSpeed = 1.0; break
-                case Qt.Key_S: robotController.forwardSpeed = -1.0; break
-                case Qt.Key_A: robotController.strafeSpeed = -1.0; break
-                case Qt.Key_D: robotController.strafeSpeed = 1.0; break
-                case Qt.Key_Q: robotController.rotationSpeed = -1.0; break
-                case Qt.Key_E: robotController.rotationSpeed = 1.0; break
+                case Qt.Key_W: robotController.forwardSpeed = 10.0; break
+                case Qt.Key_S: robotController.forwardSpeed = -10.0; break
+                case Qt.Key_A: robotController.strafeSpeed = -10.0; break
+                case Qt.Key_D: robotController.strafeSpeed = 10.0; break
+                case Qt.Key_Q: robotController.rotationSpeed = -4.0; break
+                case Qt.Key_E: robotController.rotationSpeed = 4.0; break
                 case Qt.Key_1: robotController.walkingStyle = 1; break
                 case Qt.Key_2: robotController.walkingStyle = 2; break
                 case Qt.Key_3: robotController.walkingStyle = 3; break

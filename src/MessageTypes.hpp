@@ -290,9 +290,9 @@ namespace MessageValidator {
         return cmd.has_forwardspeed() && 
                cmd.has_strafespeed() && 
                cmd.has_rotationspeed() &&
-               cmd.forwardspeed() >= -1.0f && cmd.forwardspeed() <= 1.0f &&
-               cmd.strafespeed() >= -1.0f && cmd.strafespeed() <= 1.0f &&
-               cmd.rotationspeed() >= -1.0f && cmd.rotationspeed() <= 1.0f;
+               cmd.forwardspeed() >= -10.0f && cmd.forwardspeed() <= 10.0f &&
+               cmd.strafespeed() >= -10.0f && cmd.strafespeed() <= 10.0f &&
+               cmd.rotationspeed() >= -4.0f && cmd.rotationspeed() <= 4.0f;
     }
     
     /**

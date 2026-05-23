@@ -51,7 +51,7 @@ void RobotController::setServerIp(const QString &ip)
 void RobotController::setForwardSpeed(float speed)
 {
     if (qAbs(m_forwardSpeed - speed) > 0.001f) {
-        m_forwardSpeed = qBound(-2.0f, speed, 2.0f);  // Range: -2.0 to 2.0 m/s
+        m_forwardSpeed = qBound(-10.0f, speed, 10.0f);  // Range: -10.0 to 10.0 m/s
         emit forwardSpeedChanged();
         
         if (m_connected) {
@@ -64,7 +64,7 @@ void RobotController::setForwardSpeed(float speed)
 void RobotController::setStrafeSpeed(float speed)
 {
     if (qAbs(m_strafeSpeed - speed) > 0.001f) {
-        m_strafeSpeed = qBound(-2.0f, speed, 2.0f);  // Range: -2.0 to 2.0 m/s
+        m_strafeSpeed = qBound(-10.0f, speed, 10.0f);  // Range: -10.0 to 10.0 m/s
         emit strafeSpeedChanged();
         
         if (m_connected) {
@@ -77,7 +77,7 @@ void RobotController::setStrafeSpeed(float speed)
 void RobotController::setRotationSpeed(float speed)
 {
     if (qAbs(m_rotationSpeed - speed) > 0.001f) {
-        m_rotationSpeed = qBound(-1.0f, speed, 1.0f);  // Range: -1.0 to 1.0 rad/s
+        m_rotationSpeed = qBound(-4.0f, speed, 4.0f);  // Range: -4.0 to 4.0
         emit rotationSpeedChanged();
         
         if (m_connected) {
