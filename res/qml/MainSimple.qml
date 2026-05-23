@@ -551,71 +551,98 @@ Window {
             visible: navMode
             clip: true
 
-            // Inlined map image
-            Image {
-                id: navMapImage
+            // Pannable/zoomable view — map + robot share a single transform
+            Item {
+                id: navMapView
                 anchors.fill: parent
-                fillMode: Image.PreserveAspectFit
-                cache: false
-                source: robotController.slamController
-                    ? "image://map/frame?idx=" + robotController.slamController.mapFrameIndex
-                    : ""
+                property real navMapSize: (robotController.slamController ? robotController.slamController.mapSizeMeters : 20.0) || 20.0
 
                 transform: [
                     Translate { x: navPanX; y: navPanY },
                     Scale {
-                        origin.x: navMapImage.width  / 2
-                        origin.y: navMapImage.height / 2
+                        origin.x: navMapView.width  / 2
+                        origin.y: navMapView.height / 2
                         xScale: navZoom; yScale: navZoom
                     }
                 ]
-            }
 
-            // Fallback text when no SLAM data
-            Text {
-                anchors.centerIn: parent
-                color: "#555"
-                font.pixelSize: 14
-                text: "SLAM: no data"
-                visible: !(robotController.slamController && robotController.slamController.hasData)
-                z: 2
-            }
-
-            // Inlined robot arrow
-            Image {
-                id: navRobotArrow
-                visible: robotController.slamController && robotController.slamController.hasData
-                source: "arrow.svg"
-                sourceSize.width: 32
-                sourceSize.height: 40
-                smooth: true
-
-                property var sc: {
-                    if (!robotController.slamController || !robotController.slamController.hasData) return null
-                    var c = robotController.slamController
-                    var pw = navMapImage.paintedWidth, ph = navMapImage.paintedHeight
-                    var px = navMapImage.paintedX, py = navMapImage.paintedY
-                    var ms = c.mapSizeMeters
-                    if (pw <= 0 || ph <= 0 || ms <= 0) return null
-                    var iw = navMapImage.width, ih = navMapImage.height
-                    var lx = px + (c.posX / 1000.0) * pw / ms
-                    var ly = py + (c.posY / 1000.0) * ph / ms
-                    var sx = (lx - iw / 2) * navZoom + iw / 2 + navPanX
-                    var sy = (ly - ih / 2) * navZoom + ih / 2 + navPanY
-                    return [sx, sy]
+                // Inlined map image
+                Image {
+                    id: navMapImage
+                    anchors.fill: parent
+                    fillMode: Image.PreserveAspectFit
+                    cache: false
+                    source: robotController.slamController
+                        ? "image://map/frame?idx=" + robotController.slamController.mapFrameIndex
+                        : ""
+                    antialiasing: false
+                    smooth: false
                 }
 
-                x: sc ? sc[0] - width  / 2 : -100
-                y: sc ? sc[1] - height / 2 : -100
+                // Fallback text when no SLAM data
+                Text {
+                    anchors.centerIn: parent
+                    color: "#555"
+                    font.pixelSize: 14
+                    text: "SLAM: no data"
+                    visible: !(robotController.slamController && robotController.slamController.hasData)
+                    z: 2
+                }
 
-                transform: Rotation {
-                    origin.x: navRobotArrow.width  / 2
-                    origin.y: navRobotArrow.height / 2
-                    angle: 90 + (robotController.slamController ? robotController.slamController.posTheta : 0)
+                // Robot circle — image-local coords (transform inherited from navMapView)
+                Rectangle {
+                    id: navRobotCircle
+                    visible: robotController.slamController && robotController.slamController.hasData
+                    color: "transparent"
+                    border.color: "#00aaff"
+                    border.width: 3
+
+                    property real pw:  navMapImage.paintedWidth  || 0
+                    property real ph:  navMapImage.paintedHeight || 0
+                    property real ppx: (navMapImage.width - pw) / 2 || 0
+                    property real ppy: (navMapImage.height - ph) / 2 || 0
+
+                    property real mapSz: Math.max(navMapView.navMapSize, 1)
+
+                    property real robotR: {
+                        if (!robotController.slamController || !robotController.slamController.hasData || pw <= 0) return 6
+                        return Math.max(4, 0.3 * pw / mapSz * 1.0)
+                    }
+
+                    width:  robotR * 2
+                    height: robotR * 2
+                    radius: robotR
+                    x: ppx + (robotController.slamController.posX / 1000.0) * pw / mapSz - robotR
+                    y: ppy + (robotController.slamController.posY / 1000.0) * ph / mapSz - robotR
+                }
+
+                // Direction arrow inside the robot circle
+                Image {
+                    id: navRobotArrow
+                    visible: robotController.slamController && robotController.slamController.hasData
+                    source: "arrow.svg"
+                    sourceSize.width:  24
+                    sourceSize.height: 30
+                    smooth: true
+
+                    property real pw:  navMapImage.paintedWidth  || 0
+                    property real ph:  navMapImage.paintedHeight || 0
+                    property real ppx: (navMapImage.width - pw) / 2 || 0
+                    property real ppy: (navMapImage.height - ph) / 2 || 0
+
+                    property real mapSz: Math.max(navMapView.navMapSize, 1)
+
+                    x: ppx + (robotController.slamController.posX / 1000.0) * pw / mapSz - width  / 2
+                    y: ppy + (robotController.slamController.posY / 1000.0) * ph / mapSz - height / 2
+
+                    transform: Rotation {
+                        origin.x: navRobotArrow.width  / 2
+                        origin.y: navRobotArrow.height / 2
+                        angle: 90 + (robotController.slamController ? robotController.slamController.posTheta : 0)
+                    }
                 }
             }
-
-            // NAV bar at top (overlays map)
+        
             Rectangle {
                 anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
                 height: 40

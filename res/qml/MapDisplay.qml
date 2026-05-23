@@ -12,7 +12,7 @@ Rectangle {
     clip: true
 
     property var controller: null
-    property real mapPhysicalSize: controller ? controller.mapSizeMeters : 20.0
+    property real mapPhysicalSize: (controller ? controller.mapSizeMeters : 20.0) || 20.0
 
     // Fullscreen mode (use with NAV button)
     property bool fullscreen: false
@@ -92,48 +92,89 @@ Rectangle {
         return [sx, sy]
     }
 
-    Image {
-        id: mapImage
+    // Pannable/zoomable view — map + robot share a single transform
+    Item {
+        id: mapView
         anchors.fill: parent
-        fillMode: Image.PreserveAspectFit
-        cache: false
-        source: controller ? "image://map/frame?idx=" + controller.mapFrameIndex + "&t=" + mapDisplay.refreshToken : ""
-    }
 
-    // Fallback text when no map data
-    Text {
-        anchors.centerIn: parent
-        color: "#555"
-        font.pixelSize: 14
-        text: "SLAM: no data"
-        visible: !(controller && controller.hasData)
-        z: 5
-    }
+        transform: [
+            Translate { x: mapDisplay.panX; y: mapDisplay.panY },
+            Scale {
+                origin.x: mapView.width  / 2
+                origin.y: mapView.height / 2
+                xScale: mapDisplay.zoom
+                yScale: mapDisplay.zoom
+            }
+        ]
 
-    // Robot arrow icon — positioned and rotated via SLAM pose
-    Image {
-        id: robotArrow
-        visible: controller && controller.hasData
-        source: "arrow.svg"
-        sourceSize.width: 32
-        sourceSize.height: 40
-        smooth: true
-
-        property var sc: controller && controller.hasData
-            ? worldToScreen(controller.posX, controller.posY)
-            : null
-
-        x: sc ? sc[0] - width  / 2 : -100
-        y: sc ? sc[1] - height / 2 : -100
-
-        transform: Rotation {
-            origin.x: robotArrow.width  / 2
-            origin.y: robotArrow.height / 2
-            angle: (controller ? 90 + controller.posTheta : 0)
+        Image {
+            id: mapImage
+            anchors.fill: parent
+            fillMode: Image.PreserveAspectFit
+            cache: false
+            source: controller ? "image://map/frame?idx=" + controller.mapFrameIndex + "&t=" + mapDisplay.refreshToken : ""
+            antialiasing: false
+            smooth: false
         }
 
-        Behavior on x { enabled: !mapDisplay.dragging; SmoothedAnimation { velocity: 400 } }
-        Behavior on y { enabled: !mapDisplay.dragging; SmoothedAnimation { velocity: 400 } }
+        // Fallback text when no map data
+        Text {
+            anchors.centerIn: parent
+            color: "#555"
+            font.pixelSize: 14
+            text: "SLAM: no data"
+            visible: !(controller && controller.hasData)
+            z: 5
+        }
+
+        // Robot circle — in image-local coords (transform inherited from mapView)
+        Rectangle {
+            id: robotCircle
+            visible: controller && controller.hasData
+            color: "transparent"
+            border.color: "#00aaff"
+            border.width: 3
+
+            property real pw:  mapImage.paintedWidth  || 0
+            property real ph:  mapImage.paintedHeight || 0
+            property real ppx: (mapImage.width - pw) / 2 || 0
+            property real ppy: (mapImage.height - ph) / 2 || 0
+
+            property real robotR: {
+                if (!controller || !controller.hasData || pw <= 0) return 6
+                return Math.max(4, 0.3 * pw / controller.mapSizeMeters * 1.0)
+            }
+
+            width:  robotR * 2
+            height: robotR * 2
+            radius: robotR
+            x: ppx + (controller.posX / 1000.0) * pw / mapPhysicalSize - robotR
+            y: ppy + (controller.posY / 1000.0) * ph / mapPhysicalSize - robotR
+        }
+
+        // Direction arrow — in image-local coords
+        Image {
+            id: robotArrow
+            visible: controller && controller.hasData
+            source: "arrow.svg"
+            sourceSize.width:  24
+            sourceSize.height: 30
+            smooth: true
+
+            property real pw:  mapImage.paintedWidth  || 0
+            property real ph:  mapImage.paintedHeight || 0
+            property real ppx: (mapImage.width - pw) / 2 || 0
+            property real ppy: (mapImage.height - ph) / 2 || 0
+
+            x: ppx + (controller.posX / 1000.0) * pw / mapPhysicalSize - width  / 2
+            y: ppy + (controller.posY / 1000.0) * ph / mapPhysicalSize - height / 2
+
+            transform: Rotation {
+                origin.x: robotArrow.width  / 2
+                origin.y: robotArrow.height / 2
+                angle: (controller ? 90 + controller.posTheta : 0)
+            }
+        }
     }
 
     // Mouse area for pan & zoom (left) and navigate (right)

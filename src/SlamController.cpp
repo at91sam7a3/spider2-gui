@@ -30,13 +30,24 @@ void SlamController::updateMap(int sizePixels, double sizeMeters, const QByteArr
     m_mapSizeMeters = sizeMeters;
 
     if (sizePixels > 0 && data.size() >= sizePixels * sizePixels) {
-        QImage image(sizePixels, sizePixels, QImage::Format_Grayscale8);
+        QImage image(sizePixels, sizePixels, QImage::Format_ARGB32_Premultiplied);
         for (int y = 0; y < sizePixels; ++y) {
-            uchar *line = image.scanLine(y);
-            const char *src = data.constData() + y * sizePixels;
+            const uint8_t *src = reinterpret_cast<const uint8_t *>(data.constData()) + y * sizePixels;
+            QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
             for (int x = 0; x < sizePixels; ++x) {
-                // 0 = occupied (wall) → black, 255 = free → white
-                line[x] = static_cast<uchar>(255 - src[x]);
+                uint8_t v = src[x];
+                // 0 = free (green) → 127 = unknown (yellow) → 255 = occupied (red)
+                int r, g, b;
+                if (v < 128) {
+                    r = (255 * v) / 127;
+                    g = 255;
+                    b = 0;
+                } else {
+                    r = 255;
+                    g = (255 * (255 - v)) / 127;
+                    b = 0;
+                }
+                line[x] = qRgb(r, g, b);
             }
         }
         if (m_mapProvider)
