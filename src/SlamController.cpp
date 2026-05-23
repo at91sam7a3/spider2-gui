@@ -35,7 +35,8 @@ void SlamController::updateMap(int sizePixels, double sizeMeters, const QByteArr
             const uint8_t *src = reinterpret_cast<const uint8_t *>(data.constData()) + y * sizePixels;
             QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
             for (int x = 0; x < sizePixels; ++x) {
-                uint8_t v = src[x];
+                // Invert: BreezySLAM byte 0 = OBSTACLE (occupied), 255 = FREE
+                uint8_t v = 255 - src[x];
                 // 0 = free (green) → 127 = unknown (yellow) → 255 = occupied (red)
                 int r, g, b;
                 if (v < 128) {
