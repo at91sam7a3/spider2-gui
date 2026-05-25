@@ -45,6 +45,38 @@ Window {
             visible: !navMode
         }
         
+        // ── Blob tracking overlay rectangle ──
+        Item {
+            id: blobRect
+            anchors.fill: videoImage
+            visible: robotController.hasBlob && !navMode
+
+            // Assume square blob; compute source-side pixel size and scale to display
+            readonly property real fw: Math.max(robotController.blobFrameWidth,  1)
+            readonly property real fh: Math.max(robotController.blobFrameHeight, 1)
+            readonly property real blobSideSrc: Math.sqrt(robotController.blobSize * fw * fh)
+            readonly property real displayScale: Math.min(width / fw, height / fh)
+            readonly property real pw: fw * displayScale
+            readonly property real ph: fh * displayScale
+            readonly property real px: (width  - pw) / 2
+            readonly property real py: (height - ph) / 2
+
+            Rectangle {
+                color: "transparent"
+                border.color: "#00ff00"
+                border.width: 3
+
+                readonly property real side: blobRect.blobSideSrc * blobRect.displayScale
+                readonly property real cx: blobRect.px + (robotController.blobX + 1.0) / 2.0 * blobRect.pw
+                readonly property real cy: blobRect.py + (robotController.blobY + 1.0) / 2.0 * blobRect.ph
+
+                x: cx - side / 2
+                y: cy - side / 2
+                width:  side
+                height: side
+            }
+        }
+
         // ── Layer 2: Full-window map (shown in nav mode) ──
         // ── Connection dialog ──
         Rectangle {
@@ -253,30 +285,21 @@ Window {
                 // Separator
                 Rectangle { width: 90; height: 1; color: "#444"; }
 
-                // ── Walking mode radio group ──
-                Text { text: "WALKING"; color: "#aaa"; font.pixelSize: 9; font.bold: true }
-
-                Repeater {
-                    model: [
-                        { label: "TwoLegs", style: 1 },
-                        { label: "ThreeLegs", style: 2 },
-                        { label: "Wave", style: 3 }
-                    ]
-                    Rectangle {
-                        width: 90; height: 26; radius: 4
-                        color: robotController.walkingStyle === modelData.style ? "#336633" : "#222"
-                        border.color: robotController.walkingStyle === modelData.style ? "#44ff44" : "#444"
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: modelData.label
-                            color: robotController.walkingStyle === modelData.style ? "#44ff44" : "#888"
-                            font.pixelSize: 11
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: robotController.walkingStyle = modelData.style
-                        }
+                // ── Object Tracking toggle ──
+                Rectangle {
+                    width: 90; height: 40; radius: 6
+                    color: robotController.objectTracking ? "#226644" : "#222"
+                    border.color: robotController.objectTracking ? "#44ff88" : "#444"
+                    border.width: 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Track"
+                        color: robotController.objectTracking ? "#44ff88" : "#888"
+                        font.pixelSize: 13; font.bold: true
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: robotController.setObjectTracking(!robotController.objectTracking)
                     }
                 }
 
@@ -413,7 +436,7 @@ Window {
                     anchors.centerIn: parent; spacing: 5
                     Text { text: "Movement Controls:"; color: "white"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                     Text { text: "W/S - Forward/Backward  |  A/D - Strafe Left/Right  |  Q/E - Rotate Left/Right"; color: "white"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
-                    Text { text: "1/2/3 - Walking Style  |  +/- - Height Up/Down  |  N - NAV mode toggle"; color: "white"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                    Text { text: "T - Object Tracking  |  +/- - Height Up/Down  |  N - NAV mode toggle"; color: "white"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
                 }
             }
 
@@ -488,7 +511,7 @@ Window {
                     Rectangle {
                         id: rotKnob
                         width:  controlPanel.knobR * 2; height: controlPanel.knobR * 2; radius: controlPanel.knobR
-                        x: rotPane.width / 2 - controlPanel.knobR - (robotController.rotationSpeed / 4.0) * controlPanel.halfTravel
+                        x: rotPane.width / 2 - controlPanel.knobR - (robotController.rotationSpeed / 3.0) * controlPanel.halfTravel
                         y: rotPane.height / 2 - controlPanel.knobR
                         color: Math.abs(robotController.rotationSpeed) < 0.01 ? "#cc3333" : "#ddbb00"
                     }
@@ -503,7 +526,7 @@ Window {
                         function applyRot(mouse) {
                             if (mouse.button === Qt.RightButton) { robotController.rotationSpeed = 0.0; return }
                             var cx = rotPane.width / 2
-                            robotController.rotationSpeed = Math.max(-4.0, Math.min(4.0, -(mouse.x - cx) / controlPanel.halfTravel * 4.0))
+                            robotController.rotationSpeed = Math.max(-3.0, Math.min(3.0, -(mouse.x - cx) / controlPanel.halfTravel * 3.0))
                         }
                     }
                 }
@@ -770,7 +793,7 @@ Window {
                 case Qt.Key_W: case Qt.Key_S:
                 case Qt.Key_A: case Qt.Key_D:
                 case Qt.Key_Q: case Qt.Key_E:
-                case Qt.Key_1: case Qt.Key_2: case Qt.Key_3:
+                case Qt.Key_T:
                 case Qt.Key_Plus: case Qt.Key_Equal: case Qt.Key_Minus:
                     if (navMode) break
                     // fall through
@@ -783,11 +806,9 @@ Window {
                 case Qt.Key_S: robotController.forwardSpeed = -10.0; break
                 case Qt.Key_A: robotController.strafeSpeed = -10.0; break
                 case Qt.Key_D: robotController.strafeSpeed = 10.0; break
-                case Qt.Key_Q: robotController.rotationSpeed = -4.0; break
-                case Qt.Key_E: robotController.rotationSpeed = 4.0; break
-                case Qt.Key_1: robotController.walkingStyle = 1; break
-                case Qt.Key_2: robotController.walkingStyle = 2; break
-                case Qt.Key_3: robotController.walkingStyle = 3; break
+                case Qt.Key_Q: robotController.rotationSpeed = -3.0; break
+                case Qt.Key_E: robotController.rotationSpeed = 3.0; break
+                case Qt.Key_T: robotController.setObjectTracking(!robotController.objectTracking); break
                 case Qt.Key_Plus:
                 case Qt.Key_Equal: robotController.height = Math.min(robotController.height + 5.0, 150.0); break
                 case Qt.Key_Minus: robotController.height = Math.max(robotController.height - 5.0, 40.0); break

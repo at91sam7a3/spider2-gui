@@ -41,6 +41,13 @@ class RobotController : public QObject
     Q_PROPERTY(bool slamStreamActive READ slamStreamActive NOTIFY streamHealthChanged)
     Q_PROPERTY(bool sensorsStreamActive READ sensorsStreamActive NOTIFY streamHealthChanged)
     Q_PROPERTY(int videoFrameIndex READ videoFrameIndex NOTIFY videoFrameIndexChanged)
+    Q_PROPERTY(bool objectTracking READ objectTracking WRITE setObjectTracking NOTIFY objectTrackingChanged)
+    Q_PROPERTY(bool hasBlob READ hasBlob NOTIFY blobDataChanged)
+    Q_PROPERTY(float blobX READ blobX NOTIFY blobDataChanged)
+    Q_PROPERTY(float blobY READ blobY NOTIFY blobDataChanged)
+    Q_PROPERTY(float blobSize READ blobSize NOTIFY blobDataChanged)
+    Q_PROPERTY(int blobFrameWidth READ blobFrameWidth NOTIFY blobDataChanged)
+    Q_PROPERTY(int blobFrameHeight READ blobFrameHeight NOTIFY blobDataChanged)
 
 public:
     explicit RobotController(QObject *parent = nullptr);
@@ -63,6 +70,13 @@ public:
     bool slamStreamActive() const { return m_slamStreamActive; }
     bool sensorsStreamActive() const { return m_sensorsStreamActive; }
     int videoFrameIndex() const { return m_videoFrameIndex.load(std::memory_order_relaxed); }
+    bool objectTracking() const { return m_objectTracking; }
+    bool hasBlob() const { return m_hasBlob; }
+    float blobX() const { return m_blobX; }
+    float blobY() const { return m_blobY; }
+    float blobSize() const { return m_blobSize; }
+    int blobFrameWidth() const { return m_blobFrameWidth; }
+    int blobFrameHeight() const { return m_blobFrameHeight; }
 
 public slots:
     void setServerIp(const QString &ip);
@@ -79,6 +93,8 @@ public slots:
     Q_INVOKABLE void setServoTorque(bool enabled);
     /// @brief Send move-to-point command for autonomous navigation
     Q_INVOKABLE void sendMoveToPoint(float target_x_mm, float target_y_mm, float tolerance_mm = 50.0f);
+    /// @brief Enable/disable object tracking
+    Q_INVOKABLE void setObjectTracking(bool enabled);
     /// @brief Request robot state transition
     Q_INVOKABLE void sendStateChange(const QString &state);
 
@@ -96,6 +112,8 @@ signals:
     void slamControllerChanged();
     void streamHealthChanged();
     void videoFrameIndexChanged();
+    void objectTrackingChanged();
+    void blobDataChanged();
     void connectionError(const QString &error);
 
 private slots:
@@ -167,6 +185,15 @@ private:
     bool m_slamStreamActive{false};
     bool m_sensorsStreamActive{false};
     std::atomic<int> m_videoFrameIndex{0};
+
+    // Object tracking
+    bool m_objectTracking{false};
+    bool m_hasBlob{false};
+    float m_blobX{0.0f};
+    float m_blobY{0.0f};
+    float m_blobSize{0.0f};
+    int m_blobFrameWidth{0};
+    int m_blobFrameHeight{0};
     
     // Data statistics (bytes/messages per second)
     QTimer *m_statisticsTimer{nullptr};

@@ -77,7 +77,7 @@ void RobotController::setStrafeSpeed(float speed)
 void RobotController::setRotationSpeed(float speed)
 {
     if (qAbs(m_rotationSpeed - speed) > 0.001f) {
-        m_rotationSpeed = qBound(-4.0f, speed, 4.0f);  // Range: -4.0 to 4.0
+        m_rotationSpeed = qBound(-3.0f, speed, 3.0f);  // Range: -3.0 to 3.0
         emit rotationSpeedChanged();
         
         if (m_connected) {
@@ -175,6 +175,18 @@ void RobotController::disconnectFromRobot()
     }
 }
 
+void RobotController::setObjectTracking(bool enabled)
+{
+    if (!m_connected) return;
+    m_objectTracking = enabled;
+    emit objectTrackingChanged();
+
+    Command::BlobTrackingCommand cmd;
+    cmd.set_enabled(enabled);
+    sendMessage(Spider2::MessageType::OBJECT_TRACKING_COMMAND, cmd);
+    qInfo() << "[ROBOT] Object tracking" << (enabled ? "ON" : "OFF") << "sent";
+}
+
 void RobotController::setServoTorque(bool enabled)
 {
     if (!m_connected) return;
@@ -234,7 +246,8 @@ void RobotController::communicationLoop()
             || t == static_cast<uint8_t>(Spider2::MessageType::VIDEO_FRAME)
             || t == static_cast<uint8_t>(Spider2::MessageType::TELEMETRY_UPDATE)
             || t == static_cast<uint8_t>(Spider2::MessageType::SLAM_POSE)
-            || t == static_cast<uint8_t>(Spider2::MessageType::SLAM_MAP);
+            || t == static_cast<uint8_t>(Spider2::MessageType::SLAM_MAP)
+            || t == static_cast<uint8_t>(Spider2::MessageType::OBJECT_TRACKING_DATA);
     };
 
     zmq::pollitem_t items[] = {{ *m_socket, 0, ZMQ_POLLIN, 0 }};
@@ -454,6 +467,21 @@ void RobotController::dispatchMessage(uint8_t messageType, const std::string &ra
                 QMetaObject::invokeMethod(this, [this, szPx, szM, data]() {
                     m_slamController->updateMap(szPx, szM, data);
                     markSlamReceived();
+                }, Qt::QueuedConnection);
+            }
+            break;
+        }
+        case Spider2::MessageType::OBJECT_TRACKING_DATA: {
+            Command::BlobTrackingData blob;
+            if (blob.ParseFromString(protobufData)) {
+                QMetaObject::invokeMethod(this, [this, blob]() {
+                    m_hasBlob = blob.blob_size() > 0.001f;
+                    m_blobX = blob.blob_x();
+                    m_blobY = blob.blob_y();
+                    m_blobSize = blob.blob_size();
+                    m_blobFrameWidth = blob.frame_width();
+                    m_blobFrameHeight = blob.frame_height();
+                    emit blobDataChanged();
                 }, Qt::QueuedConnection);
             }
             break;

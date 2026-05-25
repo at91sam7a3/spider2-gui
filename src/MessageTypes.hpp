@@ -27,7 +27,9 @@ enum class MessageType : uint8_t {
     SLAM_POSE = 0x09,           ///< SLAM position estimate
     SLAM_MAP = 0x0A,            ///< SLAM map data
     MOVE_TO_POINT_COMMAND = 0x0B, ///< Autonomous navigation to target point
-    ROBOT_STATE_CHANGE = 0x0C   ///< Request robot state transition
+    ROBOT_STATE_CHANGE = 0x0C,   ///< Request robot state transition
+    OBJECT_TRACKING_COMMAND = 0x0D, ///< Enable/disable object/blob tracking
+    OBJECT_TRACKING_DATA = 0x0E    ///< Blob tracking result data (robot→client)
 };
 
 /**

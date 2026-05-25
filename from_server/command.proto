@@ -77,3 +77,16 @@ message MoveToPointCommand{
 message RobotStateChange{
     required string state = 1;  // "manual_control" or "move_to_point"
 }
+
+message BlobTrackingCommand{
+    required bool enabled = 1;
+}
+
+message BlobTrackingData{
+    required int64 timestamp = 1;
+    required float blob_x = 2;       // normalized x center (-1 left, +1 right)
+    required float blob_y = 3;       // normalized y center (-1 top, +1 bottom)
+    required float blob_size = 4;    // relative area (0.0 to 1.0)
+    required int32 frame_width = 5;
+    required int32 frame_height = 6;
+}
