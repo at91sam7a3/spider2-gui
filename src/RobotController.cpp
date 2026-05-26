@@ -3,6 +3,7 @@
 #include <QThread>
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QSettings>
 #include <zmq.hpp>
 #include <zmq_addon.hpp>
 #include "command.pb.h"
@@ -33,6 +34,8 @@ RobotController::RobotController(QObject *parent)
     m_statisticsTimer->setInterval(1000);
     connect(m_statisticsTimer, &QTimer::timeout, this, &RobotController::updateDataStatistics);
     m_statisticsTimer->start();
+
+    loadRecentServerIps();
 }
 
 RobotController::~RobotController()
@@ -128,6 +131,34 @@ void RobotController::setTrajectoryType(int type)
     }
 }
 
+void RobotController::setBodyPitch(float angle)
+{
+    if (qAbs(m_bodyPitch - angle) > 0.01f) {
+        m_bodyPitch = qBound(-30.0f, angle, 30.0f);
+        emit bodyPitchChanged();
+        
+        if (m_connected) {
+            Command::PitchCommand cmd;
+            cmd.set_angle_deg(m_bodyPitch);
+            sendMessage(Spider2::MessageType::PITCH_COMMAND, cmd);
+        }
+    }
+}
+
+void RobotController::setBodyRoll(float angle)
+{
+    if (qAbs(m_bodyRoll - angle) > 0.01f) {
+        m_bodyRoll = qBound(-30.0f, angle, 30.0f);
+        emit bodyRollChanged();
+        
+        if (m_connected) {
+            Command::RollCommand cmd;
+            cmd.set_angle_deg(m_bodyRoll);
+            sendMessage(Spider2::MessageType::ROLL_COMMAND, cmd);
+        }
+    }
+}
+
 void RobotController::setVideoProvider(VideoProvider *provider)
 {
     m_videoProvider = provider;
@@ -158,6 +189,7 @@ void RobotController::connectToRobot()
         resetStreamHealth();
         emit connectedChanged();
         
+        addToRecentServerIps(m_serverIp);
         startCommunicationThread();
         m_heartbeatTimer->start();
         
@@ -610,4 +642,44 @@ void RobotController::updateTelemetry(const Command::TelemetryUpdate &telemetry)
     }
     
     emit telemetryDataChanged();
+}
+
+void RobotController::loadRecentServerIps()
+{
+    QSettings settings("Spider2", "spider2-gui");
+    m_recentServerIps = settings.value("recentServerIps").toStringList();
+    
+    if (m_recentServerIps.isEmpty()) {
+        m_recentServerIps << "spider.local";
+    }
+    emit recentServerIpsChanged();
+}
+
+void RobotController::saveRecentServerIps()
+{
+    QSettings settings("Spider2", "spider2-gui");
+    settings.setValue("recentServerIps", m_recentServerIps);
+}
+
+void RobotController::addToRecentServerIps(const QString &ip)
+{
+    if (ip.isEmpty()) return;
+    
+    m_recentServerIps.removeAll(ip);
+    m_recentServerIps.prepend(ip);
+    
+    while (m_recentServerIps.size() > 10) {
+        m_recentServerIps.removeLast();
+    }
+    
+    saveRecentServerIps();
+    emit recentServerIpsChanged();
+}
+
+void RobotController::clearRecentServerIps()
+{
+    m_recentServerIps.clear();
+    m_recentServerIps << "spider.local";
+    saveRecentServerIps();
+    emit recentServerIpsChanged();
 }

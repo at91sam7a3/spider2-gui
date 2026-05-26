@@ -81,20 +81,22 @@ Window {
         // ── Connection dialog ──
         Rectangle {
             id: connectionDialog
-            width: 350
-            height: 200
+            width: 360
+            height: 320
             anchors.centerIn: parent
             color: "lightgray"
             border.color: "black"
             border.width: 2
             radius: 10
             visible: !robotController.connected
+            clip: true
             
             property string robotIp: "spider.local"
             
             Column {
                 anchors.centerIn: parent
-                spacing: 15
+                spacing: 8
+                width: parent.width - 30
                 
                 Text {
                     text: "Connect to Spider2 Robot"
@@ -104,13 +106,14 @@ Window {
                 }
                 
                 Text {
-                    text: "Enter Robot IP Address:"
-                    font.pixelSize: 14
+                    text: "Enter Robot IP Address or select from recent:"
+                    font.pixelSize: 12
                     anchors.horizontalCenter: parent.horizontalCenter
+                    color: "#444"
                 }
                 
                 Rectangle {
-                    width: 200
+                    width: 220
                     height: 35
                     color: "white"
                     border.color: "black"
@@ -134,6 +137,55 @@ Window {
                         
                         Keys.onReturnPressed: {
                             connectButton.clicked()
+                        }
+                    }
+                }
+                
+                Rectangle {
+                    width: 220
+                    height: childrenRect.height + 8
+                    color: "#f0f0f0"
+                    border.color: "#aaa"
+                    border.width: 1
+                    radius: 4
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    visible: robotController.recentServerIps.length > 0
+                    
+                    Column {
+                        width: parent.width - 8
+                        anchors.top: parent.top
+                        anchors.topMargin: 4
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: 2
+                        
+                        Repeater {
+                            model: robotController.recentServerIps
+                            
+                            Rectangle {
+                                width: parent.width
+                                height: 22
+                                color: listMA.containsMouse ? "#d0e0f0" : "transparent"
+                                radius: 3
+                                
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 8
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: modelData
+                                    font.pixelSize: 12
+                                    color: listMA.containsMouse ? "#000080" : "#333"
+                                }
+                                
+                                MouseArea {
+                                    id: listMA
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: {
+                                        connectionDialog.robotIp = modelData
+                                        ipInput.text = modelData
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -494,8 +546,86 @@ Window {
                 Column {
                     anchors.centerIn: parent; spacing: 5
                     Text { text: "Movement Controls:"; color: "white"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                    Text { text: "W/S - Forward/Backward  |  A/D - Strafe Left/Right  |  Q/E - Rotate Left/Right"; color: "white"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
-                    Text { text: "T - Object Tracking  |  +/- - Height Up/Down  |  N - NAV mode  |  Z/C - Trajectory (Lin/Cyc)"; color: "white"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                     Text { text: "W/S - Forward/Backward  |  A/D - Strafe Left/Right  |  Q/E - Rotate Left/Right"; color: "white"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                     Text { text: "I/K - Pitch Up/Down  |  J/L - Roll Left/Right  |  R-click on orient: reset to 0"; color: "#80c080"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                     Text { text: "T - Object Tracking  |  +/- - Height Up/Down  |  N - NAV mode  |  Z/C - Trajectory (Lin/Cyc)"; color: "white"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                }
+            }
+
+            // ── Pitch/Roll 2-axis control (left of speed joystick) ──
+            Item {
+                id: orientPanel
+                anchors.bottom: parent.bottom; anchors.right: controlPanel.left
+                anchors.rightMargin: 20
+                anchors.bottomMargin: 10
+
+                readonly property int jsSize:     130
+                readonly property int slimW:       26
+                readonly property int gap:          4
+                readonly property int knobR:       11
+                readonly property real halfTravel: (jsSize - knobR * 2) / 2
+                readonly property real maxAngle:   30.0
+
+                width:  jsSize + gap + slimW
+                height: jsSize + gap + slimW
+
+                Rectangle {
+                    id: orientJsPane
+                    x: 0; y: 0
+                    width: orientPanel.jsSize; height: orientPanel.jsSize
+                    color: "#1a1a1a"; border.color: "#4a664a"; border.width: 1; radius: 6; clip: true
+
+                    Rectangle { anchors.centerIn: parent; width: parent.width; height: 1; color: "#2a3a2a" }
+                    Rectangle { anchors.centerIn: parent; width: 1; height: parent.height; color: "#2a3a2a" }
+
+                    Text { anchors { top: parent.top; horizontalCenter: parent.horizontalCenter; margins: 3 }
+                        text: "PITCH"; color: "#407040"; font.pixelSize: 8 }
+                    Text { anchors { bottom: parent.bottom; right: parent.right; margins: 3 }
+                        text: "R/L"; color: "#407040"; font.pixelSize: 7 }
+
+                    Rectangle {
+                        id: orientKnob
+                        width:  orientPanel.knobR * 2; height: orientPanel.knobR * 2; radius: orientPanel.knobR
+                        x: orientJsPane.width  / 2 - orientPanel.knobR + (robotController.bodyRoll  / orientPanel.maxAngle) * orientPanel.halfTravel
+                        y: orientJsPane.height / 2 - orientPanel.knobR - (robotController.bodyPitch / orientPanel.maxAngle) * orientPanel.halfTravel
+                        color: (Math.abs(robotController.bodyRoll)  < 0.1 &&
+                                Math.abs(robotController.bodyPitch) < 0.1) ? "#336633" : "#66aa66"
+                    }
+
+                    MouseArea {
+                        id: orientMA; anchors.fill: parent
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        onPressed:         function(mouse) { applyOrient(mouse) }
+                        onPositionChanged: function(mouse) {
+                            if (orientMA.pressedButtons & Qt.LeftButton) applyOrient(mouse)
+                        }
+                        function applyOrient(mouse) {
+                            if (mouse.button === Qt.RightButton) {
+                                robotController.bodyPitch = 0.0
+                                robotController.bodyRoll  = 0.0
+                                return
+                            }
+                            var cx = orientJsPane.width  / 2
+                            var cy = orientJsPane.height / 2
+                            var ht = orientPanel.halfTravel
+                            var ma = orientPanel.maxAngle
+                            robotController.bodyRoll  = Math.max(-ma, Math.min(ma, (mouse.x - cx) / ht * ma))
+                            robotController.bodyPitch = Math.max(-ma, Math.min(ma, (cy - mouse.y) / ht * ma))
+                        }
+                    }
+                }
+
+                Rectangle {
+                    id: orientLabel
+                    x: 0; y: orientPanel.jsSize + orientPanel.gap
+                    width: orientPanel.jsSize + orientPanel.gap + orientPanel.slimW; height: orientPanel.slimW
+                    color: "transparent"
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Pitch: " + robotController.bodyPitch.toFixed(1) + "\u00B0  |  Roll: " + robotController.bodyRoll.toFixed(1) + "\u00B0"
+                        color: "#60a060"; font.pixelSize: 9
+                    }
                 }
             }
 
@@ -853,9 +983,11 @@ Window {
                 case Qt.Key_A: case Qt.Key_D:
                 case Qt.Key_Q: case Qt.Key_E:
                 case Qt.Key_T:
-                case Qt.Key_Z: case Qt.Key_C:
-                case Qt.Key_Plus: case Qt.Key_Equal: case Qt.Key_Minus:
-                    if (navMode) break
+                 case Qt.Key_Z: case Qt.Key_C:
+                 case Qt.Key_Plus: case Qt.Key_Equal: case Qt.Key_Minus:
+                 case Qt.Key_I: case Qt.Key_K:
+                 case Qt.Key_J: case Qt.Key_L:
+                     if (navMode) break
                     // fall through
                 default:
                     break
@@ -871,18 +1003,24 @@ Window {
                 case Qt.Key_T: robotController.setObjectTracking(!robotController.objectTracking); break
                 case Qt.Key_Z: robotController.trajectoryType = 0; break
                 case Qt.Key_C: robotController.trajectoryType = 1; break
-                case Qt.Key_Plus:
-                case Qt.Key_Equal: robotController.height = Math.min(robotController.height + 5.0, 150.0); break
-                case Qt.Key_Minus: robotController.height = Math.max(robotController.height - 5.0, 40.0); break
-            }
+                 case Qt.Key_Plus:
+                 case Qt.Key_Equal: robotController.height = Math.min(robotController.height + 5.0, 150.0); break
+                 case Qt.Key_Minus: robotController.height = Math.max(robotController.height - 5.0, 40.0); break
+                 case Qt.Key_I: robotController.bodyPitch = Math.min(robotController.bodyPitch + 5.0, 30.0); break
+                 case Qt.Key_K: robotController.bodyPitch = Math.max(robotController.bodyPitch - 5.0, -30.0); break
+                 case Qt.Key_J: robotController.bodyRoll  = Math.max(robotController.bodyRoll  - 5.0, -30.0); break
+                 case Qt.Key_L: robotController.bodyRoll  = Math.min(robotController.bodyRoll  + 5.0, 30.0); break
+             }
         }
         
         Keys.onReleased: function(event) {
             if (navMode) return
             switch(event.key) {
-                case Qt.Key_W: case Qt.Key_S: robotController.forwardSpeed = 0.0; break
-                case Qt.Key_A: case Qt.Key_D: robotController.strafeSpeed = 0.0; break
-                case Qt.Key_Q: case Qt.Key_E: robotController.rotationSpeed = 0.0; break
+                 case Qt.Key_W: case Qt.Key_S: robotController.forwardSpeed = 0.0; break
+                 case Qt.Key_A: case Qt.Key_D: robotController.strafeSpeed = 0.0; break
+                 case Qt.Key_Q: case Qt.Key_E: robotController.rotationSpeed = 0.0; break
+                 case Qt.Key_I: case Qt.Key_K:
+                 case Qt.Key_J: case Qt.Key_L: break
             }
         }
     }

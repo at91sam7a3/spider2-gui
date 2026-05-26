@@ -30,7 +30,9 @@ enum class MessageType : uint8_t {
     ROBOT_STATE_CHANGE = 0x0C,   ///< Request robot state transition
     OBJECT_TRACKING_COMMAND = 0x0D, ///< Enable/disable object/blob tracking
     OBJECT_TRACKING_DATA = 0x0E,    ///< Blob tracking result data (robot→client)
-    TRAJECTORY_COMMAND = 0x0F  ///< Foot swing trajectory selection (LinearSine/Cycloid)
+    TRAJECTORY_COMMAND = 0x0F, ///< Foot swing trajectory selection (LinearSine/Cycloid)
+    PITCH_COMMAND      = 0x10, ///< Body pitch angle control (-10 to +10 degrees)
+    ROLL_COMMAND       = 0x11  ///< Body roll angle control (-10 to +10 degrees)
 };
 
 /**

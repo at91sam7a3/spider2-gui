@@ -33,6 +33,9 @@ class RobotController : public QObject
     Q_PROPERTY(float height READ height WRITE setHeight NOTIFY heightChanged)
     Q_PROPERTY(int walkingStyle READ walkingStyle WRITE setWalkingStyle NOTIFY walkingStyleChanged)
     Q_PROPERTY(int trajectoryType READ trajectoryType WRITE setTrajectoryType NOTIFY trajectoryTypeChanged)
+    Q_PROPERTY(float bodyPitch READ bodyPitch WRITE setBodyPitch NOTIFY bodyPitchChanged)
+    Q_PROPERTY(float bodyRoll READ bodyRoll WRITE setBodyRoll NOTIFY bodyRollChanged)
+    Q_PROPERTY(QStringList recentServerIps READ recentServerIps NOTIFY recentServerIpsChanged)
     Q_PROPERTY(QVariantMap telemetryData READ telemetryData NOTIFY telemetryDataChanged)
     Q_PROPERTY(LidarController* lidarController READ lidarController NOTIFY lidarControllerChanged)
     Q_PROPERTY(GyroController* gyroController READ gyroController NOTIFY gyroControllerChanged)
@@ -63,6 +66,9 @@ public:
     float height() const { return m_height; }
     int walkingStyle() const { return m_walkingStyle; }
     int trajectoryType() const { return m_trajectoryType; }
+    float bodyPitch() const { return m_bodyPitch; }
+    float bodyRoll() const { return m_bodyRoll; }
+    QStringList recentServerIps() const { return m_recentServerIps; }
     QVariantMap telemetryData() const { return m_telemetryData; }
     LidarController* lidarController() const { return m_lidarController; }
     GyroController* gyroController() const { return m_gyroController; }
@@ -88,6 +94,8 @@ public slots:
     void setHeight(float height);
     void setWalkingStyle(int style);
     void setTrajectoryType(int type);
+    void setBodyPitch(float angle);
+    void setBodyRoll(float angle);
     void setVideoProvider(VideoProvider *provider);
     void setMapProvider(MapProvider *provider);
     void connectToRobot();
@@ -100,6 +108,8 @@ public slots:
     Q_INVOKABLE void setObjectTracking(bool enabled);
     /// @brief Request robot state transition
     Q_INVOKABLE void sendStateChange(const QString &state);
+    /// @brief Clear saved recent server IP history
+    Q_INVOKABLE void clearRecentServerIps();
 
 signals:
     void serverIpChanged();
@@ -110,6 +120,9 @@ signals:
     void heightChanged();
     void walkingStyleChanged();
     void trajectoryTypeChanged();
+    void bodyPitchChanged();
+    void bodyRollChanged();
+    void recentServerIpsChanged();
     void telemetryDataChanged();
     void lidarControllerChanged();
     void gyroControllerChanged();
@@ -138,6 +151,9 @@ private:
     void sendMessage(Spider2::MessageType type, const google::protobuf::Message &message);
     void dispatchMessage(uint8_t type, const std::string &data);
     void updateTelemetry(const Command::TelemetryUpdate &telemetry);
+    void loadRecentServerIps();
+    void saveRecentServerIps();
+    void addToRecentServerIps(const QString &ip);
 
     // ZeroMQ components
     std::unique_ptr<zmq::context_t> m_context;
@@ -148,6 +164,7 @@ private:
     // Connection state
     QString m_serverIp;
     bool m_connected{false};
+    QStringList m_recentServerIps;
 
     // Robot state
     float m_forwardSpeed{0.0f};
@@ -156,6 +173,8 @@ private:
     float m_height{50.0f};   // robot default body height in mm
     int m_walkingStyle{1};
     int m_trajectoryType{0};  // 0 = LinearSine (default), 1 = Cycloid
+    float m_bodyPitch{0.0f};  // degrees, range -10.0 to 10.0
+    float m_bodyRoll{0.0f};   // degrees, range -10.0 to 10.0
 
     // Telemetry data
     QVariantMap m_telemetryData;
