@@ -90,3 +90,7 @@ message BlobTrackingData{
     required int32 frame_width = 5;
     required int32 frame_height = 6;
 }
+
+message TrajectoryCommand{
+    required int32 type = 1;  // 0 = LinearSine (default), 1 = Cycloid
+}

@@ -222,6 +222,65 @@ Window {
                     label: "SLAM"
                     active: robotController.slamStreamActive
                 }
+
+                // Separator
+                Rectangle {
+                    width: 1
+                    height: parent.height
+                    color: "white"
+                    opacity: 0.2
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                // Trajectory: LinearSine button
+                Rectangle {
+                    id: trajLinButton
+                    width: 45
+                    height: 26
+                    radius: 5
+                    color: robotController.trajectoryType === 0 ? "#3498db" : "#444444"
+                    border.color: robotController.trajectoryType === 0 ? "#5dade2" : "white"
+                    border.width: 1
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "LIN"
+                        color: "white"
+                        font.bold: true
+                        font.pixelSize: 11
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: robotController.trajectoryType = 0
+                    }
+                }
+
+                // Trajectory: Cycloid button
+                Rectangle {
+                    id: trajCycButton
+                    width: 45
+                    height: 26
+                    radius: 5
+                    color: robotController.trajectoryType === 1 ? "#9b59b6" : "#444444"
+                    border.color: robotController.trajectoryType === 1 ? "#d7bde2" : "white"
+                    border.width: 1
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "CYC"
+                        color: "white"
+                        font.bold: true
+                        font.pixelSize: 11
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: robotController.trajectoryType = 1
+                    }
+                }
             }
 
             // Left column: Servo + NAV + Walking style + Robot state
@@ -436,7 +495,7 @@ Window {
                     anchors.centerIn: parent; spacing: 5
                     Text { text: "Movement Controls:"; color: "white"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                     Text { text: "W/S - Forward/Backward  |  A/D - Strafe Left/Right  |  Q/E - Rotate Left/Right"; color: "white"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
-                    Text { text: "T - Object Tracking  |  +/- - Height Up/Down  |  N - NAV mode toggle"; color: "white"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                    Text { text: "T - Object Tracking  |  +/- - Height Up/Down  |  N - NAV mode  |  Z/C - Trajectory (Lin/Cyc)"; color: "white"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
                 }
             }
 
@@ -794,6 +853,7 @@ Window {
                 case Qt.Key_A: case Qt.Key_D:
                 case Qt.Key_Q: case Qt.Key_E:
                 case Qt.Key_T:
+                case Qt.Key_Z: case Qt.Key_C:
                 case Qt.Key_Plus: case Qt.Key_Equal: case Qt.Key_Minus:
                     if (navMode) break
                     // fall through
@@ -809,6 +869,8 @@ Window {
                 case Qt.Key_Q: robotController.rotationSpeed = -3.0; break
                 case Qt.Key_E: robotController.rotationSpeed = 3.0; break
                 case Qt.Key_T: robotController.setObjectTracking(!robotController.objectTracking); break
+                case Qt.Key_Z: robotController.trajectoryType = 0; break
+                case Qt.Key_C: robotController.trajectoryType = 1; break
                 case Qt.Key_Plus:
                 case Qt.Key_Equal: robotController.height = Math.min(robotController.height + 5.0, 150.0); break
                 case Qt.Key_Minus: robotController.height = Math.max(robotController.height - 5.0, 40.0); break

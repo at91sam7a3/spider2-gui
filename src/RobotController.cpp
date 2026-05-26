@@ -115,6 +115,19 @@ void RobotController::setWalkingStyle(int style)
     }
 }
 
+void RobotController::setTrajectoryType(int type)
+{
+    if (m_trajectoryType != type && type >= 0 && type <= 1) {
+        m_trajectoryType = type;
+        emit trajectoryTypeChanged();
+        
+        if (m_connected) {
+            auto cmd = Spider2::MessageFactory::createTrajectoryCommand(type);
+            sendMessage(Spider2::MessageType::TRAJECTORY_COMMAND, cmd);
+        }
+    }
+}
+
 void RobotController::setVideoProvider(VideoProvider *provider)
 {
     m_videoProvider = provider;

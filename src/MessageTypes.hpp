@@ -29,7 +29,8 @@ enum class MessageType : uint8_t {
     MOVE_TO_POINT_COMMAND = 0x0B, ///< Autonomous navigation to target point
     ROBOT_STATE_CHANGE = 0x0C,   ///< Request robot state transition
     OBJECT_TRACKING_COMMAND = 0x0D, ///< Enable/disable object/blob tracking
-    OBJECT_TRACKING_DATA = 0x0E    ///< Blob tracking result data (robot→client)
+    OBJECT_TRACKING_DATA = 0x0E,    ///< Blob tracking result data (robot→client)
+    TRAJECTORY_COMMAND = 0x0F  ///< Foot swing trajectory selection (LinearSine/Cycloid)
 };
 
 /**
@@ -259,6 +260,12 @@ namespace MessageFactory {
     inline Command::RobotStateChange createRobotStateChange(const std::string& state) {
         Command::RobotStateChange cmd;
         cmd.set_state(state);
+        return cmd;
+    }
+
+    inline Command::TrajectoryCommand createTrajectoryCommand(int type) {
+        Command::TrajectoryCommand cmd;
+        cmd.set_type(type);
         return cmd;
     }
 

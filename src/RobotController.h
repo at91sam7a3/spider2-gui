@@ -32,6 +32,7 @@ class RobotController : public QObject
     Q_PROPERTY(float rotationSpeed READ rotationSpeed WRITE setRotationSpeed NOTIFY rotationSpeedChanged)
     Q_PROPERTY(float height READ height WRITE setHeight NOTIFY heightChanged)
     Q_PROPERTY(int walkingStyle READ walkingStyle WRITE setWalkingStyle NOTIFY walkingStyleChanged)
+    Q_PROPERTY(int trajectoryType READ trajectoryType WRITE setTrajectoryType NOTIFY trajectoryTypeChanged)
     Q_PROPERTY(QVariantMap telemetryData READ telemetryData NOTIFY telemetryDataChanged)
     Q_PROPERTY(LidarController* lidarController READ lidarController NOTIFY lidarControllerChanged)
     Q_PROPERTY(GyroController* gyroController READ gyroController NOTIFY gyroControllerChanged)
@@ -61,6 +62,7 @@ public:
     float rotationSpeed() const { return m_rotationSpeed; }
     float height() const { return m_height; }
     int walkingStyle() const { return m_walkingStyle; }
+    int trajectoryType() const { return m_trajectoryType; }
     QVariantMap telemetryData() const { return m_telemetryData; }
     LidarController* lidarController() const { return m_lidarController; }
     GyroController* gyroController() const { return m_gyroController; }
@@ -85,6 +87,7 @@ public slots:
     void setRotationSpeed(float speed);
     void setHeight(float height);
     void setWalkingStyle(int style);
+    void setTrajectoryType(int type);
     void setVideoProvider(VideoProvider *provider);
     void setMapProvider(MapProvider *provider);
     void connectToRobot();
@@ -106,6 +109,7 @@ signals:
     void rotationSpeedChanged();
     void heightChanged();
     void walkingStyleChanged();
+    void trajectoryTypeChanged();
     void telemetryDataChanged();
     void lidarControllerChanged();
     void gyroControllerChanged();
@@ -151,6 +155,7 @@ private:
     float m_rotationSpeed{0.0f};
     float m_height{50.0f};   // robot default body height in mm
     int m_walkingStyle{1};
+    int m_trajectoryType{0};  // 0 = LinearSine (default), 1 = Cycloid
 
     // Telemetry data
     QVariantMap m_telemetryData;
