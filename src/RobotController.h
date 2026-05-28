@@ -110,6 +110,8 @@ public slots:
     Q_INVOKABLE void sendStateChange(const QString &state);
     /// @brief Clear saved recent server IP history
     Q_INVOKABLE void clearRecentServerIps();
+    /// @brief Request IMU gyro zero offset reset on the robot
+    Q_INVOKABLE void resetImu();
 
 signals:
     void serverIpChanged();

@@ -683,3 +683,12 @@ void RobotController::clearRecentServerIps()
     saveRecentServerIps();
     emit recentServerIpsChanged();
 }
+
+void RobotController::resetImu()
+{
+    if (!m_connected) return;
+    Command::ResetImu cmd;
+    cmd.set_timestamp(QDateTime::currentMSecsSinceEpoch());
+    sendMessage(Spider2::MessageType::RESET_IMU, cmd);
+    qInfo() << "[ROBOT] Reset IMU sent";
+}

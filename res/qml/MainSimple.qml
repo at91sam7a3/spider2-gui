@@ -393,6 +393,23 @@ Window {
                     }
                 }
 
+                // ── Reset IMU button ──
+                Rectangle {
+                    width: 90; height: 40; radius: 6
+                    color: resetImuMA.pressed ? "#1a4a7a" : "#1a3a5a"
+                    border.color: "#4488ff"; border.width: 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Reset IMU"; color: "white"
+                        font.pixelSize: 11; font.bold: true
+                    }
+                    MouseArea {
+                        id: resetImuMA
+                        anchors.fill: parent
+                        onClicked: robotController.resetImu()
+                    }
+                }
+
                 // Separator
                 Rectangle { width: 90; height: 1; color: "#444"; }
 
