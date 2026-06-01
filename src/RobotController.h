@@ -45,6 +45,7 @@ class RobotController : public QObject
     Q_PROPERTY(bool slamStreamActive READ slamStreamActive NOTIFY streamHealthChanged)
     Q_PROPERTY(bool sensorsStreamActive READ sensorsStreamActive NOTIFY streamHealthChanged)
     Q_PROPERTY(int videoFrameIndex READ videoFrameIndex NOTIFY videoFrameIndexChanged)
+    Q_PROPERTY(QVariantList legPositions READ legPositions NOTIFY legPositionsChanged)
     Q_PROPERTY(bool objectTracking READ objectTracking WRITE setObjectTracking NOTIFY objectTrackingChanged)
     Q_PROPERTY(bool hasBlob READ hasBlob NOTIFY blobDataChanged)
     Q_PROPERTY(float blobX READ blobX NOTIFY blobDataChanged)
@@ -78,6 +79,7 @@ public:
     bool slamStreamActive() const { return m_slamStreamActive; }
     bool sensorsStreamActive() const { return m_sensorsStreamActive; }
     int videoFrameIndex() const { return m_videoFrameIndex.load(std::memory_order_relaxed); }
+    QVariantList legPositions() const { return m_legPositions; }
     bool objectTracking() const { return m_objectTracking; }
     bool hasBlob() const { return m_hasBlob; }
     float blobX() const { return m_blobX; }
@@ -131,6 +133,7 @@ signals:
     void slamControllerChanged();
     void streamHealthChanged();
     void videoFrameIndexChanged();
+    void legPositionsChanged();
     void objectTrackingChanged();
     void blobDataChanged();
     void connectionError(const QString &error);
@@ -211,6 +214,9 @@ private:
     bool m_slamStreamActive{false};
     bool m_sensorsStreamActive{false};
     std::atomic<int> m_videoFrameIndex{0};
+
+    // Leg positions
+    QVariantList m_legPositions;
 
     // Object tracking
     bool m_objectTracking{false};

@@ -175,6 +175,43 @@ Rectangle {
                 angle: (controller ? controller.posTheta : 0)
             }
         }
+
+        // Leg circles — in image-local coords
+        Repeater {
+            model: controller ? controller.legPositions : null
+
+            Rectangle {
+                visible: controller && controller.hasData && modelData !== undefined
+                color: modelData[2] ? "#ccff0000" : "#44ff0000"
+                radius: width / 2
+
+                property real pw:  mapImage.paintedWidth  || 0
+                property real ph:  mapImage.paintedHeight || 0
+                property real ppx: (mapImage.width - pw) / 2 || 0
+                property real ppy: (mapImage.height - ph) / 2 || 0
+                property real scale: pw / (mapPhysicalSize * 1000.0)
+
+                // 50 mm diameter in real world, minimum 3 px
+                property real legDiam: Math.max(3, 50 * scale)
+                width:  legDiam
+                height: legDiam
+
+                // Body frame → screen: forward = -Y (up), right = +X
+                property real thetaRad: (controller ? controller.posTheta : 0) * Math.PI / 180.0
+                property real cosT: Math.cos(thetaRad)
+                property real sinT: Math.sin(thetaRad)
+                property real legX: modelData[0]
+                property real legY: modelData[1]
+                property real dx: (legX * (-sinT) + legY * cosT) * scale
+                property real dy: (legX * (-cosT) + legY * (-sinT)) * scale
+
+                property real cx: ppx + (controller.posX / 1000.0) * pw / mapPhysicalSize
+                property real cy: ppy + (controller.posY / 1000.0) * ph / mapPhysicalSize
+
+                x: cx + dx - legDiam / 2
+                y: cy + dy - legDiam / 2
+            }
+        }
     }
 
     // Mouse area for pan & zoom (left) and navigate (right)

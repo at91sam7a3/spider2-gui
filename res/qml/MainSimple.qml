@@ -870,6 +870,43 @@ Window {
                         angle: (robotController.slamController ? robotController.slamController.posTheta : 0)
                     }
                 }
+
+                // Leg circles — in image-local coords
+                Repeater {
+                    model: robotController.legPositions.length > 0 ? robotController.legPositions : null
+
+                    Rectangle {
+                        visible: robotController.slamController && robotController.slamController.hasData
+                        color: modelData[2] ? "#ccff0000" : "#44ff0000"
+                        radius: width / 2
+
+                        property real pw:  navMapImage.paintedWidth  || 0
+                        property real ph:  navMapImage.paintedHeight || 0
+                        property real ppx: (navMapImage.width - pw) / 2 || 0
+                        property real ppy: (navMapImage.height - ph) / 2 || 0
+                        property real mapSz: Math.max(navMapView.navMapSize, 1)
+                        property real scale: pw / (mapSz * 1000.0)
+
+                        property real legDiam: Math.max(3, 50 * scale)
+                        width:  legDiam
+                        height: legDiam
+
+                        property real thetaRad: (robotController.slamController ? robotController.slamController.posTheta : 0) * Math.PI / 180.0
+                        property real cosT: Math.cos(thetaRad)
+                        property real sinT: Math.sin(thetaRad)
+                        property real legX: modelData[0]
+                        property real legY: modelData[1]
+
+                        property real dx: (legX * (-sinT) + legY * cosT) * scale
+                        property real dy: (legX * (-cosT) + legY * (-sinT)) * scale
+
+                        property real cx: ppx + (robotController.slamController.posX / 1000.0) * pw / mapSz
+                        property real cy: ppy + (robotController.slamController.posY / 1000.0) * ph / mapSz
+
+                        x: cx + dx - legDiam / 2
+                        y: cy + dy - legDiam / 2
+                    }
+                }
             }
         
             Rectangle {

@@ -103,6 +103,17 @@ message RollCommand{
     required float angle_deg = 1;  // degrees, range: -10.0 to 10.0
 }
 
+message LegPos{
+    optional float x_mm = 1;      ///< body-frame X (mm, forward)
+    optional float y_mm = 2;      ///< body-frame Y (mm, right)
+    optional bool on_ground = 3;  ///< true if foot is on ground
+}
+
+message LegData{
+    repeated LegPos legs = 1;
+    optional int64 timestamp = 2;
+}
+
 message ResetImu{
     required int64 timestamp = 1;
 }

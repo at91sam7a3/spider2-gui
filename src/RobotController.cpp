@@ -292,7 +292,8 @@ void RobotController::communicationLoop()
             || t == static_cast<uint8_t>(Spider2::MessageType::TELEMETRY_UPDATE)
             || t == static_cast<uint8_t>(Spider2::MessageType::SLAM_POSE)
             || t == static_cast<uint8_t>(Spider2::MessageType::SLAM_MAP)
-            || t == static_cast<uint8_t>(Spider2::MessageType::OBJECT_TRACKING_DATA);
+            || t == static_cast<uint8_t>(Spider2::MessageType::OBJECT_TRACKING_DATA)
+            || t == static_cast<uint8_t>(Spider2::MessageType::LEG_DATA);
     };
 
     zmq::pollitem_t items[] = {{ *m_socket, 0, ZMQ_POLLIN, 0 }};
@@ -527,6 +528,23 @@ void RobotController::dispatchMessage(uint8_t messageType, const std::string &ra
                     m_blobFrameWidth = blob.frame_width();
                     m_blobFrameHeight = blob.frame_height();
                     emit blobDataChanged();
+                }, Qt::QueuedConnection);
+            }
+            break;
+        }
+        case Spider2::MessageType::LEG_DATA: {
+            Command::LegData legData;
+            if (legData.ParseFromString(protobufData)) {
+                QVariantList legs;
+                for (int i = 0; i < legData.legs_size(); ++i) {
+                    const auto& leg = legData.legs(i);
+                    QVariantList entry;
+                    entry << leg.x_mm() << leg.y_mm() << leg.on_ground();
+                    legs << QVariant(entry);
+                }
+                QMetaObject::invokeMethod(this, [this, legs]() {
+                    m_legPositions = legs;
+                    emit legPositionsChanged();
                 }, Qt::QueuedConnection);
             }
             break;

@@ -33,7 +33,8 @@ enum class MessageType : uint8_t {
     TRAJECTORY_COMMAND = 0x0F, ///< Foot swing trajectory selection (LinearSine/Cycloid)
     PITCH_COMMAND      = 0x10, ///< Body pitch angle control (-10 to +10 degrees)
     ROLL_COMMAND       = 0x11, ///< Body roll angle control (-10 to +10 degrees)
-    RESET_IMU          = 0x12  ///< Reset IMU gyro zero offset (client→robot)
+    RESET_IMU          = 0x12, ///< Reset IMU gyro zero offset (client→robot)
+    LEG_DATA           = 0x13  ///< Leg position data (robot→client)
 };
 
 /**
