@@ -4,8 +4,8 @@
 MapProvider::MapProvider(QObject *parent)
     : QQuickImageProvider(QQuickImageProvider::Image)
 {
-    m_currentMap = QImage(800, 800, QImage::Format_Grayscale8);
-    m_currentMap.fill(128);
+    m_currentMap = QImage(800, 800, QImage::Format_ARGB32_Premultiplied);
+    m_currentMap.fill(qRgb(128, 128, 128));
 }
 
 QImage MapProvider::requestImage(const QString &id, QSize *size, const QSize &requestedSize)

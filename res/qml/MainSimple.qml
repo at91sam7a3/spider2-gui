@@ -20,8 +20,18 @@ Window {
     property real navPanY: 0
     property real navZoom: 1.0
 
+    // Force image re-fetch when entering NAV mode
+    property int  navRefreshToken: 0
+
     function setNavMode(mode) {
         navMode = mode
+        navRefreshToken++  // force image re-fetch
+    }
+
+    onNavModeChanged: {
+        if (navMode) {
+            navPanX = 0; navPanY = 0; navZoom = 1.0
+        }
     }
     
     RobotController {
@@ -410,7 +420,24 @@ Window {
                     }
                 }
 
-                // Separator
+                // ── Reset Map button ──
+                Rectangle {
+                    width: 90; height: 40; radius: 6
+                    color: resetMapMA.pressed ? "#7a3a1a" : "#5a2a1a"
+                    border.color: "#ff8844"; border.width: 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Reset Map"; color: "white"
+                        font.pixelSize: 11; font.bold: true
+                    }
+                    MouseArea {
+                        id: resetMapMA
+                        anchors.fill: parent
+                        onClicked: robotController.resetMap()
+                    }
+                }
+
+                // ── Separator ──
                 Rectangle { width: 90; height: 1; color: "#444"; }
 
                 // ── Object Tracking toggle ──
@@ -750,7 +777,7 @@ Window {
                     Rectangle {
                         id: heightKnob
                         width:  controlPanel.knobR * 2; height: controlPanel.knobR * 2; radius: controlPanel.knobR
-                        property real normH: Math.max(0.0, Math.min(1.0, (robotController.height - 40.0) / 110.0))
+                        property real normH: Math.max(0.0, Math.min(1.0, (robotController.height - 40.0) / 210.0))
                         x: heightPane.width  / 2 - controlPanel.knobR
                         y: heightPane.height / 2 - controlPanel.knobR - (normH - 0.5) * 2.0 * controlPanel.halfTravel
                         color: Math.abs(robotController.height - 50.0) < 2.0 ? "#cc3333" : "#ddbb00"
@@ -767,18 +794,21 @@ Window {
                             if (mouse.button === Qt.RightButton) { robotController.height = 50.0; return }
                             var cy = heightPane.height / 2
                             var nh = Math.max(0.0, Math.min(1.0, 0.5 + (cy - mouse.y) / (controlPanel.halfTravel * 2.0)))
-                            robotController.height = 40.0 + nh * 110.0
+                            robotController.height = 40.0 + nh * 210.0
                         }
                     }
                 }
             }
         }
 
-        // ── In-nav-mode overlay (map inlined, no separate MapDisplay) ──
+
         Item {
+            id: navOverlay
             anchors.fill: parent
             visible: navMode
             clip: true
+
+            onVisibleChanged: { if (visible) mainWindow.navRefreshToken++ }
 
             // Pannable/zoomable view — map + robot share a single transform
             Item {
@@ -802,7 +832,7 @@ Window {
                     fillMode: Image.PreserveAspectFit
                     cache: false
                     source: robotController.slamController
-                        ? "image://map/frame?idx=" + robotController.slamController.mapFrameIndex
+                        ? "image://map/frame?idx=" + robotController.slamController.mapFrameIndex + "&t=" + navRefreshToken
                         : ""
                     antialiasing: false
                     smooth: false
@@ -939,6 +969,7 @@ Window {
                 }
 
                 Rectangle {
+                    id: resetViewBtn
                     anchors.right: parent.right; anchors.rightMargin: 10
                     anchors.verticalCenter: parent.verticalCenter
                     width: 80; height: 30; radius: 4
@@ -1058,7 +1089,7 @@ Window {
                 case Qt.Key_Z: robotController.trajectoryType = 0; break
                 case Qt.Key_C: robotController.trajectoryType = 1; break
                  case Qt.Key_Plus:
-                 case Qt.Key_Equal: robotController.height = Math.min(robotController.height + 5.0, 150.0); break
+                 case Qt.Key_Equal: robotController.height = Math.min(robotController.height + 5.0, 250.0); break
                  case Qt.Key_Minus: robotController.height = Math.max(robotController.height - 5.0, 40.0); break
                  case Qt.Key_I: robotController.bodyPitch = Math.min(robotController.bodyPitch + 5.0, 30.0); break
                  case Qt.Key_K: robotController.bodyPitch = Math.max(robotController.bodyPitch - 5.0, -30.0); break

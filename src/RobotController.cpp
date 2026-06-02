@@ -93,7 +93,7 @@ void RobotController::setRotationSpeed(float speed)
 void RobotController::setHeight(float height)
 {
     if (qAbs(m_height - height) > 0.1f) {
-        m_height = qBound(40.0f, height, 150.0f);  // Range: 40..150 mm
+        m_height = qBound(40.0f, height, 250.0f);  // Range: 40..250 mm
         emit heightChanged();
         
         if (m_connected) {
@@ -709,4 +709,14 @@ void RobotController::resetImu()
     cmd.set_timestamp(QDateTime::currentMSecsSinceEpoch());
     sendMessage(Spider2::MessageType::RESET_IMU, cmd);
     qInfo() << "[ROBOT] Reset IMU sent";
+}
+
+void RobotController::resetMap()
+{
+    if (!m_connected) return;
+    Command::ResetImu cmd;
+    cmd.set_timestamp(QDateTime::currentMSecsSinceEpoch());
+    sendMessage(Spider2::MessageType::RESET_MAP, cmd);
+    m_slamController->clearData();
+    qInfo() << "[ROBOT] Reset SLAM map sent";
 }

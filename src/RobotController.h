@@ -114,6 +114,8 @@ public slots:
     Q_INVOKABLE void clearRecentServerIps();
     /// @brief Request IMU gyro zero offset reset on the robot
     Q_INVOKABLE void resetImu();
+    /// @brief Request SLAM map reset on the robot
+    Q_INVOKABLE void resetMap();
 
 signals:
     void serverIpChanged();
