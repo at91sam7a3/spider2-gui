@@ -95,6 +95,8 @@ message BlobTrackingData{
     required float blob_size = 4;    // relative area (0.0 to 1.0)
     required int32 frame_width = 5;
     required int32 frame_height = 6;
+    optional float expected_pitch_deg = 7;  // commanded pitch sent to body
+    optional float expected_roll_deg = 8;   // commanded roll sent to body
 }
 
 message TrajectoryCommand{
