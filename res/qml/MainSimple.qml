@@ -15,6 +15,10 @@ Window {
     // Navigation mode toggle
     property bool navMode: false
 
+    // Picked color for color-picker preview (not sent to robot until "Track")
+    property color pickedColor: "transparent"
+    property bool  hasPickedColor: false
+
     // Nav map pan/zoom state (inlined, no MapDisplay)
     property real navPanX: 0
     property real navPanY: 0
@@ -107,81 +111,7 @@ Window {
             }
         }
 
-        // ── Color pick overlay ──
-        Item {
-            id: colorPickOverlay
-            anchors.fill: videoImage
-            visible: robotController.colorPickMode && !navMode
-            z: 100
-
-            // Semi-transparent dim
-            Rectangle {
-                anchors.fill: parent
-                color: "#80000000"
-            }
-
-            // Crosshair
-            Rectangle {
-                width: 2; height: 40; color: "white"; opacity: 0.9
-                x: parent.width / 2 - 1; y: parent.height / 2 - 20
-            }
-            Rectangle {
-                width: 40; height: 2; color: "white"; opacity: 0.9
-                x: parent.width / 2 - 20; y: parent.height / 2 - 1
-            }
-
-            // Instruction text
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: 20
-                text: "Click on object to track"
-                color: "white"
-                font.pixelSize: 18; font.bold: true
-                style: Text.Outlined; styleColor: "black"
-            }
-
-            // Cancel hint
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: 48
-                text: "Press Esc or right-click to cancel"
-                color: "#ccc"
-                font.pixelSize: 12
-                style: Text.Outlined; styleColor: "black"
-            }
-
-            // Mouse area to pick color
-            MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                cursorShape: Qt.CrossCursor
-                preventStealing: true
-                z: 101
-
-                onClicked: function(mouse) {
-                    if (mouse.button === Qt.RightButton) {
-                        robotController.cancelColorPickMode()
-                        return
-                    }
-
-                    // Map click to image pixel coordinates using painted geometry
-                    // (handles PreserveAspectFit centering correctly)
-                    var iw = videoImage.sourceSize.width
-                    var ih = videoImage.sourceSize.height
-                    if (iw <= 0 || ih <= 0) return
-
-                    var px = Math.floor((mouse.x - videoImage.paintedX) / videoImage.paintedWidth * iw)
-                    var py = Math.floor((mouse.y - videoImage.paintedY) / videoImage.paintedHeight * ih)
-
-                    if (px >= 0 && px < iw && py >= 0 && py < ih) {
-                        var color = robotController.getVideoPixelColor(px, py)
-                        if (color && color.alpha > 0) {
-                            robotController.setTrackingColor(color)
-                        }
-                    }
-                }
-            }
-        }
+        // ── Layer 2: Full-window map (shown in nav mode) ──
 
         // ── Layer 2: Full-window map (shown in nav mode) ──
         // ── Connection dialog ──
@@ -612,8 +542,8 @@ Window {
                         Rectangle {
                             anchors.verticalCenter: parent.verticalCenter
                             width: 12; height: 12; radius: 6
-                            visible: robotController.objectTracking && robotController.hasTrackingColor
-                            color: robotController.trackingColor
+                            visible: robotController.objectTracking || hasPickedColor
+                            color: hasPickedColor ? pickedColor : robotController.trackingColor
                             border.color: "#fff"; border.width: 1
                         }
 
@@ -633,6 +563,7 @@ Window {
                                 robotController.cancelColorPickMode()
                             } else if (robotController.objectTracking) {
                                 robotController.stopTracking()
+                                hasPickedColor = false
                             } else {
                                 robotController.enterColorPickMode()
                             }
@@ -690,18 +621,16 @@ Window {
                 telemetryData: robotController.telemetryData
             }
 
-            // Connection status
+            // Picked color swatch (replaces old "CONNECTED" label)
             Rectangle {
-                width: 150; height: 30
+                id: colorSwatch
+                width: 50; height: 50
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.right: parent.right; anchors.margins: 10
-                color: robotController.connected ? "green" : "red"
-                opacity: 0.8; radius: 5
-                Text {
-                    anchors.centerIn: parent
-                    text: robotController.connected ? "CONNECTED" : "DISCONNECTED"
-                    color: "white"; font.bold: true; font.pixelSize: 12
-                }
+                radius: 6
+                border.color: "#888"; border.width: 1
+                visible: hasPickedColor
+                color: pickedColor
             }
 
             // Simple telemetry — top left
@@ -1296,6 +1225,115 @@ Window {
                  case Qt.Key_Q: case Qt.Key_E: robotController.rotationSpeed = 0.0; break
                  case Qt.Key_I: case Qt.Key_K:
                  case Qt.Key_J: case Qt.Key_L: break
+            }
+        }
+
+        // ── Color pick overlay ──
+        // MUST be the last child of the root Rectangle so it renders on top
+        // of ALL other controls (joystick, nav overlay, etc.)
+        Item {
+            id: colorPickOverlay
+            anchors.fill: videoImage
+            visible: robotController.colorPickMode && !navMode
+            z: 999
+
+            // Semi-transparent dim
+            Rectangle {
+                anchors.fill: parent
+                color: "#80000000"
+            }
+
+            // Crosshair
+            Rectangle {
+                width: 2; height: 40; color: "white"; opacity: 0.9
+                x: parent.width / 2 - 1; y: parent.height / 2 - 20
+            }
+            Rectangle {
+                width: 40; height: 2; color: "white"; opacity: 0.9
+                x: parent.width / 2 - 20; y: parent.height / 2 - 1
+            }
+
+            // Instruction text
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 16
+                width: instructionText.width + 20
+                height: instructionText.height + 10
+                radius: 6
+                color: "#60000000"
+                Text {
+                    id: instructionText
+                    anchors.centerIn: parent
+                    text: "Click on object to track"
+                    color: "white"
+                    font.pixelSize: 18; font.bold: true
+                }
+            }
+
+            // Cancel hint
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 52
+                width: cancelText.width + 14
+                height: cancelText.height + 6
+                radius: 4
+                color: "#40000000"
+                Text {
+                    id: cancelText
+                    anchors.centerIn: parent
+                    text: "Press Esc or right-click to cancel"
+                    color: "#ccc"
+                    font.pixelSize: 12
+                }
+            }
+
+            // Mouse area to pick color
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                cursorShape: Qt.CrossCursor
+                preventStealing: true
+
+                onClicked: function(mouse) {
+                    if (mouse.button === Qt.RightButton) {
+                        robotController.cancelColorPickMode()
+                        return
+                    }
+
+                    var iw = videoImage.sourceSize.width
+                    var ih = videoImage.sourceSize.height
+                    var dw = colorPickOverlay.width
+                    var dh = colorPickOverlay.height
+
+                    if (iw <= 0 || ih <= 0 || dw <= 0 || dh <= 0) {
+                        robotController.cancelColorPickMode()
+                        return
+                    }
+
+                    // Compute painted geometry
+                    var scale = Math.min(dw / iw, dh / ih)
+                    var pw = iw * scale
+                    var ph = ih * scale
+                    var pxOff = (dw - pw) / 2
+                    var pyOff = (dh - ph) / 2
+
+                    var px = Math.floor((mouse.x - pxOff) / pw * iw)
+                    var py = Math.floor((mouse.y - pyOff) / ph * ih)
+
+                    px = Math.max(0, Math.min(iw - 1, px))
+                    py = Math.max(0, Math.min(ih - 1, py))
+
+                    // Read pixel locally for swatch preview (from JPEG frame)
+                    var color = robotController.getVideoPixelColor(px, py)
+                    if (color.a > 0) {
+                        pickedColor = color
+                        hasPickedColor = true
+                    }
+
+                    // Send coordinates to robot; it reads HSV from raw frame
+                    robotController.sendPickColor(px, py, iw, ih)
+                    robotController.cancelColorPickMode()
+                }
             }
         }
     }

@@ -134,6 +134,8 @@ public slots:
     Q_INVOKABLE QColor getVideoPixelColor(int imageX, int imageY);
     /// @brief Set tracking color from a QColor (converts RGB→HSV, sends to robot)
     Q_INVOKABLE void setTrackingColor(const QColor &color);
+    /// @brief Send click coordinates to robot; it reads pixel from raw frame and computes HSV
+    Q_INVOKABLE void sendPickColor(int imageX, int imageY, int frameWidth, int frameHeight);
     /// @brief Stop blob tracking
     Q_INVOKABLE void stopTracking();
 

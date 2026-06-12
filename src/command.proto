@@ -84,6 +84,8 @@ message BlobTrackingCommand{
     optional int32 hue_range = 3 [default = 25];
     optional int32 min_saturation = 4 [default = 50];
     optional int32 min_value = 5 [default = 50];
+    optional int32 pick_x = 6;       // sample pixel x from raw frame (robot computes HSV)
+    optional int32 pick_y = 7;       // sample pixel y from raw frame
 }
 
 message BlobTrackingData{

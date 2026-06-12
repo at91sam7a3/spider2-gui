@@ -275,8 +275,8 @@ void RobotController::setTrackingColor(const QColor &color)
     // OpenCV uses H/2 (0-179 vs 0-359)
     m_trackingColorHue = h / 2;
     m_trackingColorHueRange = 25;
-    m_trackingColorMinSat = std::max(s / 2, 30);
-    m_trackingColorMinVal = std::max(v / 2, 30);
+    m_trackingColorMinSat = 60;
+    m_trackingColorMinVal = 40;
 
     qInfo() << "[ROBOT] Tracking color set: RGB" << color.name()
             << "→ HSV" << h << s << v
@@ -297,6 +297,28 @@ void RobotController::setTrackingColor(const QColor &color)
     cmd.set_min_value(m_trackingColorMinVal);
     sendMessage(Spider2::MessageType::OBJECT_TRACKING_COMMAND, cmd);
     qInfo() << "[ROBOT] Blob tracking ON with hue" << m_trackingColorHue;
+}
+
+void RobotController::sendPickColor(int imageX, int imageY, int frameWidth, int frameHeight)
+{
+    if (!m_connected) return;
+
+    // Update local tracking state
+    m_trackingColorHue = 0;
+    m_hasTrackingColor = true;
+    m_objectTracking = true;
+    m_colorPickMode = false;
+    emit objectTrackingChanged();
+    emit colorPickModeChanged();
+    emit trackingColorChanged();
+
+    Command::BlobTrackingCommand cmd;
+    cmd.set_enabled(true);
+    cmd.set_pick_x(imageX);
+    cmd.set_pick_y(imageY);
+    sendMessage(Spider2::MessageType::OBJECT_TRACKING_COMMAND, cmd);
+    qInfo() << "[ROBOT] Send pick color at" << imageX << imageY
+            << "frame" << frameWidth << "x" << frameHeight;
 }
 
 void RobotController::stopTracking()
