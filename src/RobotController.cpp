@@ -139,7 +139,7 @@ void RobotController::setBodyPitch(float angle)
         
         if (m_connected) {
             Command::PitchCommand cmd;
-            cmd.set_angle_deg(m_bodyPitch);
+            cmd.set_angle_deg(-m_bodyPitch);
             sendMessage(Spider2::MessageType::PITCH_COMMAND, cmd);
         }
     }
