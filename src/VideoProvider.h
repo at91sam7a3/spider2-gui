@@ -4,6 +4,7 @@
 #include <QImage>
 #include <QObject>
 #include <QMutex>
+#include <QColor>
 
 class VideoProvider : public QQuickImageProvider
 {
@@ -14,6 +15,8 @@ public:
     
     // QQuickImageProvider interface
     QImage requestImage(const QString &id, QSize *size, const QSize &requestedSize) override;
+
+    QColor pixelAt(int x, int y);
 
 public slots:
     void updateVideoFrame(const QImage &frame);

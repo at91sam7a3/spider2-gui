@@ -59,7 +59,7 @@ Window {
         Item {
             id: blobRect
             anchors.fill: videoImage
-            visible: robotController.hasBlob && !navMode
+            visible: robotController.hasBlob && !robotController.colorPickMode && !navMode
 
             // Assume square blob; compute source-side pixel size and scale to display
             readonly property real fw: Math.max(robotController.blobFrameWidth,  1)
@@ -73,7 +73,7 @@ Window {
 
             Rectangle {
                 color: "transparent"
-                border.color: "#00ff00"
+                border.color: robotController.hasTrackingColor ? robotController.trackingColor : "#00ff00"
                 border.width: 3
 
                 readonly property real side: blobRect.blobSideSrc * blobRect.displayScale
@@ -84,6 +84,102 @@ Window {
                 y: cy - side / 2
                 width:  side
                 height: side
+            }
+
+            // FPS indicator
+            Rectangle {
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 8
+                width: fpsText.width + 16
+                height: fpsText.height + 8
+                radius: 4
+                color: "#aa000000"
+                visible: robotController.objectTracking
+                Text {
+                    id: fpsText
+                    anchors.centerIn: parent
+                    text: robotController.blobTrackingFps.toFixed(1) + " fps"
+                    color: robotController.blobTrackingFps > 5 ? "#44ff88" :
+                           robotController.blobTrackingFps > 2 ? "#ffaa44" : "#ff4444"
+                    font.pixelSize: 13; font.bold: true
+                }
+            }
+        }
+
+        // ── Color pick overlay ──
+        Item {
+            id: colorPickOverlay
+            anchors.fill: videoImage
+            visible: robotController.colorPickMode && !navMode
+            z: 100
+
+            // Semi-transparent dim
+            Rectangle {
+                anchors.fill: parent
+                color: "#80000000"
+            }
+
+            // Crosshair
+            Rectangle {
+                width: 2; height: 40; color: "white"; opacity: 0.9
+                x: parent.width / 2 - 1; y: parent.height / 2 - 20
+            }
+            Rectangle {
+                width: 40; height: 2; color: "white"; opacity: 0.9
+                x: parent.width / 2 - 20; y: parent.height / 2 - 1
+            }
+
+            // Instruction text
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 20
+                text: "Click on object to track"
+                color: "white"
+                font.pixelSize: 18; font.bold: true
+                style: Text.Outlined; styleColor: "black"
+            }
+
+            // Cancel hint
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 48
+                text: "Press Esc or right-click to cancel"
+                color: "#ccc"
+                font.pixelSize: 12
+                style: Text.Outlined; styleColor: "black"
+            }
+
+            // Mouse area to pick color
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                cursorShape: Qt.CrossCursor
+                preventStealing: true
+                z: 101
+
+                onClicked: function(mouse) {
+                    if (mouse.button === Qt.RightButton) {
+                        robotController.cancelColorPickMode()
+                        return
+                    }
+
+                    // Map click to image pixel coordinates using painted geometry
+                    // (handles PreserveAspectFit centering correctly)
+                    var iw = videoImage.sourceSize.width
+                    var ih = videoImage.sourceSize.height
+                    if (iw <= 0 || ih <= 0) return
+
+                    var px = Math.floor((mouse.x - videoImage.paintedX) / videoImage.paintedWidth * iw)
+                    var py = Math.floor((mouse.y - videoImage.paintedY) / videoImage.paintedHeight * ih)
+
+                    if (px >= 0 && px < iw && py >= 0 && py < ih) {
+                        var color = robotController.getVideoPixelColor(px, py)
+                        if (color && color.alpha > 0) {
+                            robotController.setTrackingColor(color)
+                        }
+                    }
+                }
             }
         }
 
@@ -345,6 +441,65 @@ Window {
                 }
             }
 
+            // ── CPU load bar ──
+            Rectangle {
+                anchors.top: streamHealthBar.bottom
+                anchors.topMargin: 6
+                anchors.horizontalCenter: parent.horizontalCenter
+                height: 20
+                width: 200
+                radius: 4
+                color: "#222"
+                border.color: "#555"
+                border.width: 1
+                visible: robotController.connected && !navMode
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 8
+                    Repeater {
+                        model: [
+                            { idx: 0, label: "C0" },
+                            { idx: 1, label: "C1" },
+                            { idx: 2, label: "C2" },
+                            { idx: 3, label: "C3" }
+                        ]
+                        delegate: Item {
+                            width: 30; height: parent.parent.height
+                            Rectangle {
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: 3
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: 12
+                                height: Math.min(14, Math.max(2, (robotController.telemetryData["cpu_" + modelData.idx + "_load"] || 0) * 0.14))
+                                radius: 2
+                                color: {
+                                    var v = robotController.telemetryData["cpu_" + modelData.idx + "_load"] || 0
+                                    return v > 80 ? "#ff4444" : v > 50 ? "#ffaa44" : "#44ff88"
+                                }
+                            }
+                            Text {
+                                anchors.top: parent.top
+                                anchors.topMargin: 1
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: modelData.label
+                                color: "#666"
+                                font.pixelSize: 7
+                            }
+                        }
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: {
+                            var l = robotController.telemetryData["cpu_load"]
+                            return l !== undefined ? l.toFixed(0) + "%" : "--"
+                        }
+                        color: "#aaa"
+                        font.pixelSize: 11
+                        font.bold: true
+                    }
+                }
+            }
+
             // Left column: Servo + NAV + Walking style + Robot state
             Column {
                 anchors.left: parent.left
@@ -443,18 +598,45 @@ Window {
                 // ── Object Tracking toggle ──
                 Rectangle {
                     width: 90; height: 40; radius: 6
-                    color: robotController.objectTracking ? "#226644" : "#222"
-                    border.color: robotController.objectTracking ? "#44ff88" : "#444"
+                    color: robotController.colorPickMode ? "#664422" :
+                           robotController.objectTracking ? "#226644" : "#222"
+                    border.color: robotController.colorPickMode ? "#ffaa44" :
+                                  robotController.objectTracking ? "#44ff88" : "#444"
                     border.width: 1
-                    Text {
+
+                    Row {
                         anchors.centerIn: parent
-                        text: "Track"
-                        color: robotController.objectTracking ? "#44ff88" : "#888"
-                        font.pixelSize: 13; font.bold: true
+                        spacing: 6
+
+                        // Color indicator dot
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 12; height: 12; radius: 6
+                            visible: robotController.objectTracking && robotController.hasTrackingColor
+                            color: robotController.trackingColor
+                            border.color: "#fff"; border.width: 1
+                        }
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: robotController.colorPickMode ? "Pick..." :
+                                  robotController.objectTracking ? "Track" : "Track"
+                            color: robotController.colorPickMode ? "#ffaa44" :
+                                   robotController.objectTracking ? "#44ff88" : "#888"
+                            font.pixelSize: 13; font.bold: true
+                        }
                     }
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: robotController.setObjectTracking(!robotController.objectTracking)
+                        onClicked: {
+                            if (robotController.colorPickMode) {
+                                robotController.cancelColorPickMode()
+                            } else if (robotController.objectTracking) {
+                                robotController.stopTracking()
+                            } else {
+                                robotController.enterColorPickMode()
+                            }
+                        }
                     }
                 }
 
@@ -1085,7 +1267,15 @@ Window {
                 case Qt.Key_D: robotController.strafeSpeed = 10.0; break
                 case Qt.Key_Q: robotController.rotationSpeed = -3.0; break
                 case Qt.Key_E: robotController.rotationSpeed = 3.0; break
-                case Qt.Key_T: robotController.setObjectTracking(!robotController.objectTracking); break
+                case Qt.Key_T:
+                    if (robotController.colorPickMode)
+                        robotController.cancelColorPickMode()
+                    else if (robotController.objectTracking)
+                        robotController.stopTracking()
+                    else
+                        robotController.enterColorPickMode()
+                    break
+                case Qt.Key_Escape: robotController.cancelColorPickMode(); break
                 case Qt.Key_Z: robotController.trajectoryType = 0; break
                 case Qt.Key_C: robotController.trajectoryType = 1; break
                  case Qt.Key_Plus:

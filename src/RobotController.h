@@ -3,6 +3,8 @@
 #include <QObject>
 #include <QString>
 #include <QVariantMap>
+#include <QColor>
+#include <QVector>
 #include <QTimer>
 #include <memory>
 #include <zmq.hpp>
@@ -53,6 +55,10 @@ class RobotController : public QObject
     Q_PROPERTY(float blobSize READ blobSize NOTIFY blobDataChanged)
     Q_PROPERTY(int blobFrameWidth READ blobFrameWidth NOTIFY blobDataChanged)
     Q_PROPERTY(int blobFrameHeight READ blobFrameHeight NOTIFY blobDataChanged)
+    Q_PROPERTY(bool colorPickMode READ colorPickMode NOTIFY colorPickModeChanged)
+    Q_PROPERTY(QColor trackingColor READ trackingColor NOTIFY trackingColorChanged)
+    Q_PROPERTY(bool hasTrackingColor READ hasTrackingColor NOTIFY trackingColorChanged)
+    Q_PROPERTY(float blobTrackingFps READ blobTrackingFps NOTIFY blobTrackingFpsChanged)
 
 public:
     explicit RobotController(QObject *parent = nullptr);
@@ -87,6 +93,10 @@ public:
     float blobSize() const { return m_blobSize; }
     int blobFrameWidth() const { return m_blobFrameWidth; }
     int blobFrameHeight() const { return m_blobFrameHeight; }
+    bool colorPickMode() const { return m_colorPickMode; }
+    QColor trackingColor() const { return m_trackingColor; }
+    bool hasTrackingColor() const { return m_hasTrackingColor; }
+    float blobTrackingFps() const { return m_blobTrackingFps; }
 
 public slots:
     void setServerIp(const QString &ip);
@@ -116,6 +126,16 @@ public slots:
     Q_INVOKABLE void resetImu();
     /// @brief Request SLAM map reset on the robot
     Q_INVOKABLE void resetMap();
+    /// @brief Enter color pick mode — next click on video picks tracking color
+    Q_INVOKABLE void enterColorPickMode();
+    /// @brief Cancel color pick mode without picking
+    Q_INVOKABLE void cancelColorPickMode();
+    /// @brief Read pixel color at image coordinates (from latest frame)
+    Q_INVOKABLE QColor getVideoPixelColor(int imageX, int imageY);
+    /// @brief Set tracking color from a QColor (converts RGB→HSV, sends to robot)
+    Q_INVOKABLE void setTrackingColor(const QColor &color);
+    /// @brief Stop blob tracking
+    Q_INVOKABLE void stopTracking();
 
 signals:
     void serverIpChanged();
@@ -138,6 +158,9 @@ signals:
     void legPositionsChanged();
     void objectTrackingChanged();
     void blobDataChanged();
+    void colorPickModeChanged();
+    void trackingColorChanged();
+    void blobTrackingFpsChanged();
     void connectionError(const QString &error);
 
 private slots:
@@ -228,6 +251,16 @@ private:
     float m_blobSize{0.0f};
     int m_blobFrameWidth{0};
     int m_blobFrameHeight{0};
+    bool m_colorPickMode{false};
+    QColor m_trackingColor;
+    bool m_hasTrackingColor{false};
+    int m_trackingColorHue{60};
+    int m_trackingColorHueRange{25};
+    int m_trackingColorMinSat{50};
+    int m_trackingColorMinVal{50};
+    float m_blobTrackingFps{0.0f};
+    QVector<qint64> m_blobTimestamps;
+    static constexpr int FPS_WINDOW_MS = 2000;
     
     // Data statistics (bytes/messages per second)
     QTimer *m_statisticsTimer{nullptr};

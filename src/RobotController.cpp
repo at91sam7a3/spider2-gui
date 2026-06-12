@@ -4,6 +4,8 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QSettings>
+#include <QColor>
+#include <cmath>
 #include <zmq.hpp>
 #include <zmq_addon.hpp>
 #include "command.pb.h"
@@ -228,8 +230,87 @@ void RobotController::setObjectTracking(bool enabled)
 
     Command::BlobTrackingCommand cmd;
     cmd.set_enabled(enabled);
+    if (enabled && m_hasTrackingColor) {
+        cmd.set_hue(m_trackingColorHue);
+        cmd.set_hue_range(m_trackingColorHueRange);
+        cmd.set_min_saturation(m_trackingColorMinSat);
+        cmd.set_min_value(m_trackingColorMinVal);
+    }
     sendMessage(Spider2::MessageType::OBJECT_TRACKING_COMMAND, cmd);
     qInfo() << "[ROBOT] Object tracking" << (enabled ? "ON" : "OFF") << "sent";
+}
+
+void RobotController::enterColorPickMode()
+{
+    if (!m_connected) return;
+    m_colorPickMode = true;
+    emit colorPickModeChanged();
+    qInfo() << "[ROBOT] Color pick mode entered";
+}
+
+void RobotController::cancelColorPickMode()
+{
+    if (!m_colorPickMode) return;
+    m_colorPickMode = false;
+    emit colorPickModeChanged();
+    qInfo() << "[ROBOT] Color pick mode cancelled";
+}
+
+QColor RobotController::getVideoPixelColor(int imageX, int imageY)
+{
+    if (!m_videoProvider) return QColor();
+    return m_videoProvider->pixelAt(imageX, imageY);
+}
+
+void RobotController::setTrackingColor(const QColor &color)
+{
+    if (!m_connected) return;
+
+    m_trackingColor = color;
+    m_hasTrackingColor = true;
+
+    // Convert QColor RGB → HSV
+    int h, s, v;
+    color.toHsv().getHsv(&h, &s, &v);
+    // OpenCV uses H/2 (0-179 vs 0-359)
+    m_trackingColorHue = h / 2;
+    m_trackingColorHueRange = 25;
+    m_trackingColorMinSat = std::max(s / 2, 30);
+    m_trackingColorMinVal = std::max(v / 2, 30);
+
+    qInfo() << "[ROBOT] Tracking color set: RGB" << color.name()
+            << "→ HSV" << h << s << v
+            << "→ OpenCV H:" << m_trackingColorHue;
+
+    // Enable tracking
+    m_objectTracking = true;
+    m_colorPickMode = false;
+    emit objectTrackingChanged();
+    emit colorPickModeChanged();
+    emit trackingColorChanged();
+
+    Command::BlobTrackingCommand cmd;
+    cmd.set_enabled(true);
+    cmd.set_hue(m_trackingColorHue);
+    cmd.set_hue_range(m_trackingColorHueRange);
+    cmd.set_min_saturation(m_trackingColorMinSat);
+    cmd.set_min_value(m_trackingColorMinVal);
+    sendMessage(Spider2::MessageType::OBJECT_TRACKING_COMMAND, cmd);
+    qInfo() << "[ROBOT] Blob tracking ON with hue" << m_trackingColorHue;
+}
+
+void RobotController::stopTracking()
+{
+    if (!m_connected) return;
+    m_objectTracking = false;
+    m_colorPickMode = false;
+    emit objectTrackingChanged();
+    emit colorPickModeChanged();
+
+    Command::BlobTrackingCommand cmd;
+    cmd.set_enabled(false);
+    sendMessage(Spider2::MessageType::OBJECT_TRACKING_COMMAND, cmd);
+    qInfo() << "[ROBOT] Blob tracking OFF sent";
 }
 
 void RobotController::setServoTorque(bool enabled)
@@ -528,6 +609,17 @@ void RobotController::dispatchMessage(uint8_t messageType, const std::string &ra
                     m_blobFrameWidth = blob.frame_width();
                     m_blobFrameHeight = blob.frame_height();
                     emit blobDataChanged();
+
+                    // Update rolling FPS
+                    qint64 now = QDateTime::currentMSecsSinceEpoch();
+                    m_blobTimestamps.append(now);
+                    while (!m_blobTimestamps.isEmpty() && m_blobTimestamps.first() < now - FPS_WINDOW_MS)
+                        m_blobTimestamps.removeFirst();
+                    float fps = m_blobTimestamps.size() * 1000.0f / FPS_WINDOW_MS;
+                    if (qAbs(fps - m_blobTrackingFps) > 0.5f) {
+                        m_blobTrackingFps = fps;
+                        emit blobTrackingFpsChanged();
+                    }
                 }, Qt::QueuedConnection);
             }
             break;

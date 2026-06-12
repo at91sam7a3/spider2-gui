@@ -2,6 +2,7 @@
 #include <QMutexLocker>
 #include <QPainter>
 #include <QDebug>
+#include <QColor>
 
 VideoProvider::VideoProvider(QObject *parent)
     : QQuickImageProvider(QQuickImageProvider::Image)
@@ -42,4 +43,13 @@ void VideoProvider::updateVideoFrame(const QImage &frame)
     QMutexLocker locker(&m_frameMutex);
     m_currentFrame = frame;
     emit frameUpdated();
+}
+
+QColor VideoProvider::pixelAt(int x, int y)
+{
+    QMutexLocker locker(&m_frameMutex);
+    if (x < 0 || x >= m_currentFrame.width() || y < 0 || y >= m_currentFrame.height())
+        return QColor();
+    QRgb rgb = m_currentFrame.pixel(x, y);
+    return QColor(rgb);
 }
