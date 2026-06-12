@@ -631,9 +631,9 @@ void RobotController::dispatchMessage(uint8_t messageType, const std::string &ra
                     m_blobFrameWidth = blob.frame_width();
                     m_blobFrameHeight = blob.frame_height();
                     if (blob.has_expected_pitch_deg())
-                        m_telemetryData["expected_pitch"] = blob.expected_pitch_deg();
+                        m_telemetryData["expected_pitch_target"] = blob.expected_pitch_deg();
                     if (blob.has_expected_roll_deg())
-                        m_telemetryData["expected_roll"] = blob.expected_roll_deg();
+                        m_telemetryData["expected_roll_target"] = blob.expected_roll_deg();
                     emit blobDataChanged();
 
                     // Update rolling FPS

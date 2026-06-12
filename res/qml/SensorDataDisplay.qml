@@ -168,31 +168,32 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
             spacing: 4
-            visible: telemetryData["expected_pitch"] !== undefined
+            visible: telemetryData["expected_pitch"] !== undefined || telemetryData["expected_pitch_target"] !== undefined
 
             Text {
-                text: "Exp Roll"
+                text: "Target"
+                color: "#888888"
+                font.pixelSize: 10
+                Layout.preferredWidth: 36
+            }
+            Text {
+                readonly property var t: telemetryData["expected_pitch_target"]
+                text: t !== undefined ? t.toFixed(1) + "\u00B0" : "--\u00B0"
+                color: "#ffcc44"
+                font.pixelSize: 12
+                font.bold: true
+                Layout.fillWidth: true
+            }
+            Text {
+                text: "Smooth"
                 color: "#888888"
                 font.pixelSize: 10
                 Layout.preferredWidth: 40
             }
             Text {
-                readonly property var r: telemetryData["expected_roll"]
-                text: r !== undefined ? r.toFixed(1) + "\u00B0" : "--\u00B0"
-                color: "#aaaaaa"
-                font.pixelSize: 11
-                Layout.fillWidth: true
-            }
-            Text {
-                text: "Exp Pitch"
-                color: "#888888"
-                font.pixelSize: 10
-                Layout.preferredWidth: 48
-            }
-            Text {
-                readonly property var p: telemetryData["expected_pitch"]
-                text: p !== undefined ? p.toFixed(1) + "\u00B0" : "--\u00B0"
-                color: "#ffcc44"
+                readonly property var s: telemetryData["expected_pitch"]
+                text: s !== undefined ? s.toFixed(1) + "\u00B0" : "--\u00B0"
+                color: "#88aaff"
                 font.pixelSize: 12
                 font.bold: true
                 Layout.preferredWidth: 42
