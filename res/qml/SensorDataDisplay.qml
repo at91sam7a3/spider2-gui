@@ -14,6 +14,8 @@ Rectangle {
 
     required property var telemetryData
 
+    height: layout.implicitHeight + 20
+
     // Voltage thresholds (V)
     readonly property real voltLow:  10.5
     readonly property real voltWarn: 11.0
@@ -33,7 +35,10 @@ Rectangle {
     }
 
     ColumnLayout {
-        anchors.fill: parent
+        id: layout
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
         anchors.margins: 10
         spacing: 6
 

@@ -79,6 +79,7 @@ set(QML_FILES
     res/qml/ArtificialHorizon.qml
     res/qml/DataStreamIndicator.qml
     res/qml/SensorDataDisplay.qml
+    res/qml/SettingsPage.qml
     res/qml/arrow.svg
 )
 

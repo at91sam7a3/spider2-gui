@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 import Spider2 1.0
 import "."
 
@@ -14,6 +15,7 @@ Window {
     
     // Navigation mode toggle
     property bool navMode: false
+    property bool settingsMode: false
 
     // Picked color for color-picker preview (not sent to robot until "Track")
     property color pickedColor: "transparent"
@@ -56,14 +58,14 @@ Window {
             fillMode: Image.PreserveAspectFit
             smooth: true
             cache: false
-            visible: !navMode
+            visible: !navMode && !settingsMode
         }
         
         // ── Blob tracking overlay rectangle ──
         Item {
             id: blobRect
             anchors.fill: videoImage
-            visible: robotController.hasBlob && !robotController.colorPickMode && !navMode
+            visible: robotController.hasBlob && !robotController.colorPickMode && !navMode && !settingsMode
 
             // Assume square blob; compute source-side pixel size and scale to display
             readonly property real fw: Math.max(robotController.blobFrameWidth,  1)
@@ -111,7 +113,130 @@ Window {
             }
         }
 
-        // ── Layer 2: Full-window map (shown in nav mode) ──
+        // ── AprilTag detection overlay ──
+        Item {
+            id: aprilTagRect
+            anchors.fill: videoImage
+            visible: robotController.hasAprilTag && !robotController.colorPickMode && !navMode && !settingsMode
+
+            readonly property real fw: Math.max(robotController.aprilTagFrameWidth,  1)
+            readonly property real fh: Math.max(robotController.aprilTagFrameHeight, 1)
+            readonly property real displayScale: Math.min(width / fw, height / fh)
+            readonly property real pw: fw * displayScale
+            readonly property real ph: fh * displayScale
+            readonly property real px: (width  - pw) / 2
+            readonly property real py: (height - ph) / 2
+
+            function mapX(sx) { return px + (sx / fw) * pw }
+            function mapY(sy) { return py + (sy / fh) * ph }
+
+            Canvas {
+                id: aprilTagCanvas
+                anchors.fill: parent
+                Connections {
+                    target: robotController
+                    onAprilTagDataChanged: aprilTagCanvas.requestPaint()
+                }
+                onPaint: {
+                    var ctx = getContext("2d")
+                    ctx.reset()
+                    var c = robotController.aprilTagCorners
+                    if (c.length < 8) return
+
+                    var p = []
+                    for (var i = 0; i < 8; i += 2)
+                        p.push({x: aprilTagRect.mapX(c[i]), y: aprilTagRect.mapY(c[i+1])})
+
+                    // Compute center
+                    var cx = 0, cy = 0
+                    for (var k = 0; k < 4; k++) { cx += p[k].x; cy += p[k].y }
+                    cx /= 4; cy /= 4
+
+                    // Tag quadrilateral outline
+                    ctx.strokeStyle = "#00ccff"
+                    ctx.lineWidth = 2
+                    ctx.beginPath()
+                    ctx.moveTo(p[0].x, p[0].y)
+                    for (var j = 1; j < 4; j++) ctx.lineTo(p[j].x, p[j].y)
+                    ctx.closePath()
+                    ctx.stroke()
+
+                    // Center dot
+                    ctx.fillStyle = "#00ccff"
+                    ctx.beginPath()
+                    ctx.arc(cx, cy, 5, 0, 2 * Math.PI)
+                    ctx.fill()
+
+                    // Corner markers
+                    ctx.fillStyle = "#ffcc00"
+                    for (var ci = 0; ci < 4; ci++) {
+                        ctx.beginPath()
+                        ctx.arc(p[ci].x, p[ci].y, 3, 0, 2 * Math.PI)
+                        ctx.fill()
+                    }
+
+                    // Normal vector arrow (up direction relative to tag)
+                    var tmx = (p[0].x + p[1].x) / 2
+                    var tmy = (p[0].y + p[1].y) / 2
+                    var nx = tmx - cx, ny = tmy - cy
+                    var nlen = Math.sqrt(nx*nx + ny*ny)
+                    if (nlen > 2) {
+                        nx /= nlen; ny /= nlen
+                        var aLen = Math.min(nlen * 0.6, 30)
+
+                        ctx.strokeStyle = "#ffcc00"
+                        ctx.lineWidth = 2
+                        ctx.beginPath()
+                        ctx.moveTo(cx, cy)
+                        ctx.lineTo(cx + nx * aLen, cy + ny * aLen)
+                        ctx.stroke()
+
+                        // Arrowhead
+                        var ang = Math.atan2(ny, nx)
+                        var hs = 7
+                        ctx.fillStyle = "#ffcc00"
+                        ctx.beginPath()
+                        ctx.moveTo(cx + nx * aLen, cy + ny * aLen)
+                        ctx.lineTo(cx + nx * aLen - hs * Math.cos(ang - 0.5),
+                                   cy + ny * aLen - hs * Math.sin(ang - 0.5))
+                        ctx.lineTo(cx + nx * aLen - hs * Math.cos(ang + 0.5),
+                                   cy + ny * aLen - hs * Math.sin(ang + 0.5))
+                        ctx.closePath()
+                        ctx.fill()
+                    }
+                }
+            }
+
+            // Tag ID label above tag
+            Text {
+                x: aprilTagRect.mapX(robotController.aprilTagFrameWidth * (robotController.aprilTagX + 1) / 2) - width / 2
+                y: aprilTagRect.mapY(robotController.aprilTagFrameHeight * (robotController.aprilTagY + 1) / 2) - 28
+                text: "ID: " + robotController.aprilTagId
+                color: "#00ccff"
+                font.pixelSize: 15; font.bold: true
+                style: Text.Outline; styleColor: "#80000000"
+            }
+
+            // Coordinates label below tag
+            Text {
+                x: aprilTagRect.mapX(robotController.aprilTagFrameWidth * (robotController.aprilTagX + 1) / 2) - width / 2
+                y: aprilTagRect.mapY(robotController.aprilTagFrameHeight * (robotController.aprilTagY + 1) / 2) + 8
+                text: "(" + robotController.aprilTagX.toFixed(2) + ", " + robotController.aprilTagY.toFixed(2) + ")"
+                color: "#fff"
+                font.pixelSize: 12
+                style: Text.Outline; styleColor: "#80000000"
+            }
+
+            // Distance + yaw label
+            Text {
+                x: aprilTagRect.mapX(robotController.aprilTagFrameWidth * (robotController.aprilTagX + 1) / 2) - width / 2
+                y: aprilTagRect.mapY(robotController.aprilTagFrameHeight * (robotController.aprilTagY + 1) / 2) + 26
+                text: robotController.aprilTagDistance.toFixed(1) + "m  " + robotController.aprilTagYawDeg.toFixed(1) + "°"
+                color: "#ccc"
+                font.pixelSize: 11
+                style: Text.Outline; styleColor: "#80000000"
+            }
+        }
 
         // ── Layer 2: Full-window map (shown in nav mode) ──
         // ── Connection dialog ──
@@ -281,10 +406,10 @@ Window {
             }
         }
         
-        // ── Overlay controls (hidden in nav mode) ──
+        // ── Overlay controls (hidden in nav mode or settings mode) ──
         Item {
             anchors.fill: parent
-            visible: robotController.connected && !navMode
+            visible: robotController.connected && !navMode && !settingsMode
 
             // Data stream health — top center
             Row {
@@ -371,21 +496,22 @@ Window {
                 }
             }
 
-            // ── CPU load bar ──
+            // ── CPU load (digital) ──
             Rectangle {
                 anchors.top: streamHealthBar.bottom
                 anchors.topMargin: 6
                 anchors.horizontalCenter: parent.horizontalCenter
-                height: 20
+                height: 28
                 width: 200
                 radius: 4
                 color: "#222"
                 border.color: "#555"
                 border.width: 1
                 visible: robotController.connected && !navMode
+
                 Row {
                     anchors.centerIn: parent
-                    spacing: 8
+                    spacing: 6
                     Repeater {
                         model: [
                             { idx: 0, label: "C0" },
@@ -393,39 +519,14 @@ Window {
                             { idx: 2, label: "C2" },
                             { idx: 3, label: "C3" }
                         ]
-                        delegate: Item {
-                            width: 30; height: parent.parent.height
-                            Rectangle {
-                                anchors.bottom: parent.bottom
-                                anchors.bottomMargin: 3
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                width: 12
-                                height: Math.min(14, Math.max(2, (robotController.telemetryData["cpu_" + modelData.idx + "_load"] || 0) * 0.14))
-                                radius: 2
-                                color: {
-                                    var v = robotController.telemetryData["cpu_" + modelData.idx + "_load"] || 0
-                                    return v > 80 ? "#ff4444" : v > 50 ? "#ffaa44" : "#44ff88"
-                                }
-                            }
-                            Text {
-                                anchors.top: parent.top
-                                anchors.topMargin: 1
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: modelData.label
-                                color: "#666"
-                                font.pixelSize: 7
-                            }
+                        delegate: Text {
+                            readonly property var v: robotController.telemetryData["cpu_" + modelData.idx + "_load"] || 0
+                            text: modelData.label + " " + v.toFixed(0) + "%"
+                            color: v > 80 ? "#ff4444" : v > 50 ? "#ffaa44" : "#88ff88"
+                            font.pixelSize: 10
+                            font.bold: true
+                            font.letterSpacing: -0.5
                         }
-                    }
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: {
-                            var l = robotController.telemetryData["cpu_load"]
-                            return l !== undefined ? l.toFixed(0) + "%" : "--"
-                        }
-                        color: "#aaa"
-                        font.pixelSize: 11
-                        font.bold: true
                     }
                 }
             }
@@ -522,6 +623,28 @@ Window {
                     }
                 }
 
+                // ── Settings button ──
+                Rectangle {
+                    width: 90; height: 40; radius: 6
+                    color: settingsMode ? "#cc8800" : "#335566"
+                    border.color: settingsMode ? "#ffcc00" : "#5599aa"
+                    border.width: 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Settings"
+                        color: "white"; font.pixelSize: 11; font.bold: true
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            settingsMode = !settingsMode
+                            if (settingsMode) {
+                                robotController.requestSettings()
+                            }
+                        }
+                    }
+                }
+
                 // ── Separator ──
                 Rectangle { width: 90; height: 1; color: "#444"; }
 
@@ -574,6 +697,46 @@ Window {
                 // Separator
                 Rectangle { width: 90; height: 1; color: "#444"; }
 
+                // ── AprilTag detection toggle ──
+                Rectangle {
+                    width: 90; height: 40; radius: 6
+                    color: robotController.aprilTagEnabled ? "#224466" : "#222"
+                    border.color: robotController.aprilTagEnabled ? "#44aaff" : "#444"
+                    border.width: 1
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: robotController.aprilTagEnabled ? "AprilTag" : "AprilTag"
+                        color: robotController.aprilTagEnabled ? "#44aaff" : "#888"
+                        font.pixelSize: 11; font.bold: true
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            robotController.setAprilTagEnabled(!robotController.aprilTagEnabled)
+                        }
+                    }
+                }
+
+                // Tag ID input
+                Row {
+                    width: 90; height: 26; spacing: 4
+                    Text {
+                        width: 30; height: 26
+                        text: "ID:"
+                        color: "#aaa"; font.pixelSize: 11
+                        verticalAlignment: Text.AlignVCenter
+                        horizontalAlignment: Text.AlignRight
+                    }
+                    SpinBox {
+                        id: tagIdSpin
+                        width: 56; height: 24
+                        from: 0; to: 511; value: robotController.targetTagId
+                        editable: true
+                        onValueModified: robotController.setTargetTagId(value)
+                    }
+                }
+
                 // ── Robot state radio group ──
                 Text { text: "STATE"; color: "#aaa"; font.pixelSize: 9; font.bold: true }
 
@@ -615,7 +778,7 @@ Window {
             // Sensor data block — top right
             SensorDataDisplay {
                 id: sensorDataDisplay
-                width: 220; height: 205
+                width: 220
                 anchors.top: parent.top; anchors.right: parent.right
                 anchors.margins: 10
                 telemetryData: robotController.telemetryData
@@ -635,6 +798,7 @@ Window {
 
             // Simple telemetry — top left
             Rectangle {
+                id: simpleTelemetry
                 width: 220; height: 140
                 anchors.top: parent.top; anchors.left: parent.left
                 anchors.margins: 10
@@ -663,6 +827,54 @@ Window {
                             ? "\u03B8: " + robotController.slamController.posTheta.toFixed(1) + "\u00B0"
                             : ""
                         color: "#8cf"; font.pixelSize: 11
+                    }
+                }
+            }
+
+            // AprilTag info — top left, right of telemetry
+            Rectangle {
+                id: aprilTagInfo
+                width: 200; height: simpleTelemetry.height
+                anchors.top: simpleTelemetry.top; anchors.left: simpleTelemetry.right
+                anchors.leftMargin: 6
+                color: "black"; opacity: 0.7; radius: 8
+                border.color: robotController.aprilTagEnabled ? "#44aaff" : "#444"
+                border.width: 1
+                visible: robotController.aprilTagEnabled
+
+                Column {
+                    anchors.centerIn: parent; spacing: 3
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "AprilTag"
+                        color: robotController.aprilTagEnabled ? "#44aaff" : "#888"
+                        font.pixelSize: 12; font.bold: true
+                    }
+                    Rectangle { width: parent.width; height: 1; color: "#444"; }
+                    Text {
+                        text: "ID: " + (robotController.hasAprilTag ? robotController.aprilTagId : "\u2014")
+                        color: robotController.hasAprilTag ? "white" : "#888"
+                        font.pixelSize: 11
+                    }
+                    Text {
+                        text: "Dist: " + (robotController.hasAprilTag ? robotController.aprilTagDistance.toFixed(1) + " m" : "\u2014")
+                        color: robotController.hasAprilTag ? "white" : "#888"
+                        font.pixelSize: 11
+                    }
+                    Text {
+                        text: "Yaw: " + (robotController.hasAprilTag ? robotController.aprilTagYawDeg.toFixed(1) + "\u00B0" : "\u2014")
+                        color: robotController.hasAprilTag ? "white" : "#888"
+                        font.pixelSize: 11
+                    }
+                    Text {
+                        text: "X: " + (robotController.hasAprilTag ? robotController.aprilTagX.toFixed(2) : "\u2014")
+                        color: robotController.hasAprilTag ? "#aaa" : "#666"
+                        font.pixelSize: 10
+                    }
+                    Text {
+                        text: "Y: " + (robotController.hasAprilTag ? robotController.aprilTagY.toFixed(2) : "\u2014")
+                        color: robotController.hasAprilTag ? "#aaa" : "#666"
+                        font.pixelSize: 10
                     }
                 }
             }
@@ -1169,6 +1381,13 @@ Window {
             }
         }
 
+        // ── Settings page overlay ──
+        SettingsPage {
+            id: settingsPage
+            visible: settingsMode
+            onBack: settingsMode = false
+        }
+
         // ── Keyboard — global (works in both modes) ──
         Keys.onPressed: function(event) {
             switch(event.key) {
@@ -1183,12 +1402,12 @@ Window {
                  case Qt.Key_Plus: case Qt.Key_Equal: case Qt.Key_Minus:
                  case Qt.Key_I: case Qt.Key_K:
                  case Qt.Key_J: case Qt.Key_L:
-                     if (navMode) break
+                     if (navMode || settingsMode) break
                     // fall through
                 default:
                     break
             }
-            if (navMode) return
+            if (navMode || settingsMode) return
             switch(event.key) {
                 case Qt.Key_W: robotController.forwardSpeed = 10.0; break
                 case Qt.Key_S: robotController.forwardSpeed = -10.0; break
@@ -1196,6 +1415,9 @@ Window {
                 case Qt.Key_D: robotController.strafeSpeed = 10.0; break
                 case Qt.Key_Q: robotController.rotationSpeed = -3.0; break
                 case Qt.Key_E: robotController.rotationSpeed = 3.0; break
+                case Qt.Key_R:
+                    robotController.setAprilTagEnabled(!robotController.aprilTagEnabled)
+                    break
                 case Qt.Key_T:
                     if (robotController.colorPickMode)
                         robotController.cancelColorPickMode()
@@ -1218,7 +1440,7 @@ Window {
         }
         
         Keys.onReleased: function(event) {
-            if (navMode) return
+            if (navMode || settingsMode) return
             switch(event.key) {
                  case Qt.Key_W: case Qt.Key_S: robotController.forwardSpeed = 0.0; break
                  case Qt.Key_A: case Qt.Key_D: robotController.strafeSpeed = 0.0; break
@@ -1234,7 +1456,7 @@ Window {
         Item {
             id: colorPickOverlay
             anchors.fill: videoImage
-            visible: robotController.colorPickMode && !navMode
+            visible: robotController.colorPickMode && !navMode && !settingsMode
             z: 999
 
             // Semi-transparent dim

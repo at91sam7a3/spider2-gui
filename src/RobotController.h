@@ -59,6 +59,19 @@ class RobotController : public QObject
     Q_PROPERTY(QColor trackingColor READ trackingColor NOTIFY trackingColorChanged)
     Q_PROPERTY(bool hasTrackingColor READ hasTrackingColor NOTIFY trackingColorChanged)
     Q_PROPERTY(float blobTrackingFps READ blobTrackingFps NOTIFY blobTrackingFpsChanged)
+    Q_PROPERTY(QVariantMap settingsData READ settingsData NOTIFY settingsDataChanged)
+    Q_PROPERTY(bool aprilTagEnabled READ aprilTagEnabled WRITE setAprilTagEnabled NOTIFY aprilTagEnabledChanged)
+    Q_PROPERTY(bool hasAprilTag READ hasAprilTag NOTIFY aprilTagDataChanged)
+    Q_PROPERTY(int aprilTagId READ aprilTagId NOTIFY aprilTagDataChanged)
+    Q_PROPERTY(float aprilTagX READ aprilTagX NOTIFY aprilTagDataChanged)
+    Q_PROPERTY(float aprilTagY READ aprilTagY NOTIFY aprilTagDataChanged)
+    Q_PROPERTY(float aprilTagSize READ aprilTagSize NOTIFY aprilTagDataChanged)
+    Q_PROPERTY(float aprilTagDistance READ aprilTagDistance NOTIFY aprilTagDataChanged)
+    Q_PROPERTY(float aprilTagYawDeg READ aprilTagYawDeg NOTIFY aprilTagDataChanged)
+    Q_PROPERTY(int aprilTagFrameWidth READ aprilTagFrameWidth NOTIFY aprilTagDataChanged)
+    Q_PROPERTY(int aprilTagFrameHeight READ aprilTagFrameHeight NOTIFY aprilTagDataChanged)
+    Q_PROPERTY(QVariantList aprilTagCorners READ aprilTagCorners NOTIFY aprilTagDataChanged)
+    Q_PROPERTY(int targetTagId READ targetTagId WRITE setTargetTagId NOTIFY targetTagIdChanged)
 
 public:
     explicit RobotController(QObject *parent = nullptr);
@@ -97,6 +110,19 @@ public:
     QColor trackingColor() const { return m_trackingColor; }
     bool hasTrackingColor() const { return m_hasTrackingColor; }
     float blobTrackingFps() const { return m_blobTrackingFps; }
+    QVariantMap settingsData() const { return m_settingsData; }
+    bool aprilTagEnabled() const { return m_aprilTagEnabled; }
+    bool hasAprilTag() const { return m_hasAprilTag; }
+    int aprilTagId() const { return m_aprilTagId; }
+    float aprilTagX() const { return m_aprilTagX; }
+    float aprilTagY() const { return m_aprilTagY; }
+    float aprilTagSize() const { return m_aprilTagSize; }
+    float aprilTagDistance() const { return m_aprilTagDistance; }
+    float aprilTagYawDeg() const { return m_aprilTagYawDeg; }
+    int aprilTagFrameWidth() const { return m_aprilTagFrameWidth; }
+    int aprilTagFrameHeight() const { return m_aprilTagFrameHeight; }
+    QVariantList aprilTagCorners() const { return m_aprilTagCorners; }
+    int targetTagId() const { return m_targetTagId; }
 
 public slots:
     void setServerIp(const QString &ip);
@@ -138,6 +164,14 @@ public slots:
     Q_INVOKABLE void sendPickColor(int imageX, int imageY, int frameWidth, int frameHeight);
     /// @brief Stop blob tracking
     Q_INVOKABLE void stopTracking();
+    /// @brief Request current settings from robot
+    Q_INVOKABLE void requestSettings();
+    /// @brief Send modified settings to robot
+    Q_INVOKABLE void sendSettingsSet(const QVariantMap &settings);
+    /// @brief Enable/disable AprilTag detection mode (no-movement)
+    Q_INVOKABLE void setAprilTagEnabled(bool enabled);
+    /// @brief Set target tag ID to track
+    Q_INVOKABLE void setTargetTagId(int id);
 
 signals:
     void serverIpChanged();
@@ -163,6 +197,10 @@ signals:
     void colorPickModeChanged();
     void trackingColorChanged();
     void blobTrackingFpsChanged();
+    void settingsDataChanged();
+    void aprilTagEnabledChanged();
+    void aprilTagDataChanged();
+    void targetTagIdChanged();
     void connectionError(const QString &error);
 
 private slots:
@@ -268,4 +306,21 @@ private:
     QTimer *m_statisticsTimer{nullptr};
     std::atomic<uint64_t> m_bytesReceivedCounter{0};
     std::atomic<uint64_t> m_messagesReceivedCounter{0};
+
+    // Settings data cache
+    QVariantMap m_settingsData;
+
+    // AprilTag detection
+    bool m_aprilTagEnabled{false};
+    bool m_hasAprilTag{false};
+    int m_aprilTagId{-1};
+    float m_aprilTagX{0.0f};
+    float m_aprilTagY{0.0f};
+    float m_aprilTagSize{0.0f};
+    float m_aprilTagDistance{0.0f};
+    float m_aprilTagYawDeg{0.0f};
+    int m_aprilTagFrameWidth{0};
+    int m_aprilTagFrameHeight{0};
+    QVariantList m_aprilTagCorners;
+    int m_targetTagId{0};
 };

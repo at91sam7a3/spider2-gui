@@ -35,7 +35,12 @@ enum class MessageType : uint8_t {
     ROLL_COMMAND       = 0x11, ///< Body roll angle control (-10 to +10 degrees)
     RESET_IMU          = 0x12, ///< Reset IMU gyro zero offset (client→robot)
     LEG_DATA           = 0x13, ///< Leg position data (robot→client)
-    RESET_MAP          = 0x14  ///< Reset SLAM map (client→robot)
+    RESET_MAP          = 0x14, ///< Reset SLAM map (client→robot)
+    SETTINGS_GET       = 0x15, ///< Request settings from robot (client→robot)
+    SETTINGS_SET       = 0x16, ///< Update settings on robot (client→robot)
+    SETTINGS_DATA      = 0x17, ///< Settings payload (bidirectional)
+    APRIL_TAG_COMMAND  = 0x18, ///< AprilTag tracking command (client→robot)
+    APRIL_TAG_DATA     = 0x19  ///< AprilTag detection data (robot→client)
 };
 
 /**

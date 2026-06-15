@@ -335,6 +335,82 @@ void RobotController::stopTracking()
     qInfo() << "[ROBOT] Blob tracking OFF sent";
 }
 
+void RobotController::setAprilTagEnabled(bool enabled)
+{
+    if (!m_connected) return;
+    m_aprilTagEnabled = enabled;
+    emit aprilTagEnabledChanged();
+
+    Command::AprilTagCommand cmd;
+    cmd.set_enabled(enabled);
+    cmd.set_no_movement(true);
+    cmd.set_target_tag_id(m_targetTagId);
+    sendMessage(Spider2::MessageType::APRIL_TAG_COMMAND, cmd);
+    qInfo() << "[ROBOT] AprilTag detection" << (enabled ? "ON" : "OFF")
+            << "target_tag_id=" << m_targetTagId;
+}
+
+void RobotController::setTargetTagId(int id)
+{
+    if (m_targetTagId != id) {
+        m_targetTagId = id;
+        emit targetTagIdChanged();
+    }
+    if (m_connected && m_aprilTagEnabled) {
+        Command::AprilTagCommand cmd;
+        cmd.set_enabled(true);
+        cmd.set_no_movement(true);
+        cmd.set_target_tag_id(m_targetTagId);
+        sendMessage(Spider2::MessageType::APRIL_TAG_COMMAND, cmd);
+    }
+}
+
+void RobotController::requestSettings()
+{
+    if (!m_connected) return;
+    uint8_t type_byte = static_cast<uint8_t>(Spider2::MessageType::SETTINGS_GET);
+    zmq::message_t type_msg(&type_byte, 1);
+    try {
+        m_socket->send(type_msg, zmq::send_flags::dontwait);
+    } catch (const zmq::error_t &e) {
+        qWarning() << "[ROBOT] Failed to send SETTINGS_GET:" << e.what();
+    }
+}
+
+void RobotController::sendSettingsSet(const QVariantMap &settings)
+{
+    if (!m_connected) return;
+    Command::RobotSettings proto;
+
+#define ASSIGN_FLOAT(k, f) do { auto it = settings.find(k); if (it != settings.end()) proto.set_##f(it.value().toFloat()); } while(0)
+#define ASSIGN_INT(k, f)   do { auto it = settings.find(k); if (it != settings.end()) proto.set_##f(it.value().toInt()); } while(0)
+
+    ASSIGN_FLOAT("blob_kp",               blob_kp);
+    ASSIGN_FLOAT("blob_ki",               blob_ki);
+    ASSIGN_FLOAT("blob_max_pitch_deg",    blob_max_pitch_deg);
+    ASSIGN_FLOAT("blob_pitch_dead_zone",  blob_pitch_dead_zone);
+    ASSIGN_FLOAT("blob_rot_dead_zone",    blob_rot_dead_zone);
+    ASSIGN_FLOAT("blob_max_rotation_deg", blob_max_rotation_deg);
+    ASSIGN_INT("blob_min_streak",         blob_min_streak);
+    ASSIGN_FLOAT("blob_max_fraction",     blob_max_fraction);
+    ASSIGN_INT("blob_min_area",           blob_min_area);
+    ASSIGN_FLOAT("gait_movement_smoothing", gait_movement_smoothing);
+    ASSIGN_FLOAT("gait_rotation_smoothing", gait_rotation_smoothing);
+    ASSIGN_FLOAT("gait_step_height",      gait_step_height);
+    ASSIGN_FLOAT("gait_max_step_length",  gait_max_step_length);
+    ASSIGN_FLOAT("gait_frequency",        gait_frequency);
+    ASSIGN_FLOAT("gait_swing_ratio",      gait_swing_ratio);
+    ASSIGN_INT("servo_move_time_ms",      servo_move_time_ms);
+    ASSIGN_FLOAT("body_max_pitch_deg",    body_max_pitch_deg);
+    ASSIGN_FLOAT("body_max_roll_deg",     body_max_roll_deg);
+
+#undef ASSIGN_FLOAT
+#undef ASSIGN_INT
+
+    sendMessage(Spider2::MessageType::SETTINGS_SET, proto);
+    qInfo() << "[ROBOT] Settings SET sent";
+}
+
 void RobotController::setServoTorque(bool enabled)
 {
     if (!m_connected) return;
@@ -396,7 +472,8 @@ void RobotController::communicationLoop()
             || t == static_cast<uint8_t>(Spider2::MessageType::SLAM_POSE)
             || t == static_cast<uint8_t>(Spider2::MessageType::SLAM_MAP)
             || t == static_cast<uint8_t>(Spider2::MessageType::OBJECT_TRACKING_DATA)
-            || t == static_cast<uint8_t>(Spider2::MessageType::LEG_DATA);
+            || t == static_cast<uint8_t>(Spider2::MessageType::LEG_DATA)
+            || t == static_cast<uint8_t>(Spider2::MessageType::APRIL_TAG_DATA);
     };
 
     zmq::pollitem_t items[] = {{ *m_socket, 0, ZMQ_POLLIN, 0 }};
@@ -650,6 +727,28 @@ void RobotController::dispatchMessage(uint8_t messageType, const std::string &ra
             }
             break;
         }
+        case Spider2::MessageType::APRIL_TAG_DATA: {
+            Command::AprilTagData tag;
+            if (tag.ParseFromString(protobufData)) {
+                QMetaObject::invokeMethod(this, [this, tag]() {
+                    m_hasAprilTag = tag.tag_size() > 0.001f;
+                    m_aprilTagId = tag.tag_id();
+                    m_aprilTagX = tag.tag_x();
+                    m_aprilTagY = tag.tag_y();
+                    m_aprilTagSize = tag.tag_size();
+                    m_aprilTagDistance = tag.distance();
+                    m_aprilTagYawDeg = tag.yaw_deg();
+                    m_aprilTagFrameWidth = tag.frame_width();
+                    m_aprilTagFrameHeight = tag.frame_height();
+                    QVariantList corners;
+                    for (int ci = 0; ci < tag.corners_size(); ++ci)
+                        corners.append(tag.corners(ci));
+                    m_aprilTagCorners = corners;
+                    emit aprilTagDataChanged();
+                }, Qt::QueuedConnection);
+            }
+            break;
+        }
         case Spider2::MessageType::LEG_DATA: {
             Command::LegData legData;
             if (legData.ParseFromString(protobufData)) {
@@ -663,6 +762,33 @@ void RobotController::dispatchMessage(uint8_t messageType, const std::string &ra
                 QMetaObject::invokeMethod(this, [this, legs]() {
                     m_legPositions = legs;
                     emit legPositionsChanged();
+                }, Qt::QueuedConnection);
+            }
+            break;
+        }
+        case Spider2::MessageType::SETTINGS_DATA: {
+            Command::RobotSettings settings;
+            if (settings.ParseFromString(protobufData)) {
+                QMetaObject::invokeMethod(this, [this, settings]() {
+                    if (settings.has_blob_kp())              m_settingsData["blob_kp"] = settings.blob_kp();
+                    if (settings.has_blob_ki())              m_settingsData["blob_ki"] = settings.blob_ki();
+                    if (settings.has_blob_max_pitch_deg())   m_settingsData["blob_max_pitch_deg"] = settings.blob_max_pitch_deg();
+                    if (settings.has_blob_pitch_dead_zone()) m_settingsData["blob_pitch_dead_zone"] = settings.blob_pitch_dead_zone();
+                    if (settings.has_blob_rot_dead_zone())   m_settingsData["blob_rot_dead_zone"] = settings.blob_rot_dead_zone();
+                    if (settings.has_blob_max_rotation_deg()) m_settingsData["blob_max_rotation_deg"] = settings.blob_max_rotation_deg();
+                    if (settings.has_blob_min_streak())      m_settingsData["blob_min_streak"] = settings.blob_min_streak();
+                    if (settings.has_blob_max_fraction())    m_settingsData["blob_max_fraction"] = settings.blob_max_fraction();
+                    if (settings.has_blob_min_area())        m_settingsData["blob_min_area"] = settings.blob_min_area();
+                    if (settings.has_gait_movement_smoothing()) m_settingsData["gait_movement_smoothing"] = settings.gait_movement_smoothing();
+                    if (settings.has_gait_rotation_smoothing()) m_settingsData["gait_rotation_smoothing"] = settings.gait_rotation_smoothing();
+                    if (settings.has_gait_step_height())     m_settingsData["gait_step_height"] = settings.gait_step_height();
+                    if (settings.has_gait_max_step_length()) m_settingsData["gait_max_step_length"] = settings.gait_max_step_length();
+                    if (settings.has_gait_frequency())       m_settingsData["gait_frequency"] = settings.gait_frequency();
+                    if (settings.has_gait_swing_ratio())     m_settingsData["gait_swing_ratio"] = settings.gait_swing_ratio();
+                    if (settings.has_servo_move_time_ms())   m_settingsData["servo_move_time_ms"] = settings.servo_move_time_ms();
+                    if (settings.has_body_max_pitch_deg())   m_settingsData["body_max_pitch_deg"] = settings.body_max_pitch_deg();
+                    if (settings.has_body_max_roll_deg())    m_settingsData["body_max_roll_deg"] = settings.body_max_roll_deg();
+                    emit settingsDataChanged();
                 }, Qt::QueuedConnection);
             }
             break;
